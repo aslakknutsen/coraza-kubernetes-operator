@@ -1,4 +1,4 @@
-module github.com/shaneutt/coraza-kubernetes-operator
+module github.com/networking-incubator/coraza-kubernetes-operator
 
 go 1.25.5
 

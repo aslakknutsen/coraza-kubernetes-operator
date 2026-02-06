@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/shaneutt/coraza-kubernetes-operator/test/utils"
+	"github.com/networking-incubator/coraza-kubernetes-operator/test/utils"
 )
 
 const testServerAddr = ":38080"

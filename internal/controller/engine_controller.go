@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	wafv1alpha1 "github.com/shaneutt/coraza-kubernetes-operator/api/v1alpha1"
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 )
 
 // -----------------------------------------------------------------------------

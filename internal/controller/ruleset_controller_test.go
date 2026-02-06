@@ -27,9 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	wafv1alpha1 "github.com/shaneutt/coraza-kubernetes-operator/api/v1alpha1"
-	"github.com/shaneutt/coraza-kubernetes-operator/internal/rulesets/cache"
-	"github.com/shaneutt/coraza-kubernetes-operator/test/utils"
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
+	"github.com/networking-incubator/coraza-kubernetes-operator/test/utils"
 )
 
 const (

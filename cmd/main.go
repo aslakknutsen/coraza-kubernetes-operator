@@ -38,9 +38,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	wafv1alpha1 "github.com/shaneutt/coraza-kubernetes-operator/api/v1alpha1"
-	"github.com/shaneutt/coraza-kubernetes-operator/internal/controller"
-	"github.com/shaneutt/coraza-kubernetes-operator/internal/rulesets/cache"
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/controller"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
 	// +kubebuilder:scaffold:imports
 )
 

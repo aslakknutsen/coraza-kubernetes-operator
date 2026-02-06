@@ -35,7 +35,7 @@ spec:
             - --health-probe-bind-address=:8081
             - --envoy-cluster-name=outbound|80||coraza-controller-manager.coraza-system.svc.cluster.local
             - --cache-gc-interval=3s
-          image: ghcr.io/shaneutt/coraza-kubernetes-operator:dev
+          image: ghcr.io/networking-incubator/coraza-kubernetes-operator:dev
           imagePullPolicy: IfNotPresent
           name: manager
           ports: []

@@ -7,7 +7,7 @@ domain: k8s.coraza.io
 layout:
 - go.kubebuilder.io/v4
 projectName: coraza-kubernetes-operator
-repo: github.com/shaneutt/coraza-kubernetes-operator
+repo: github.com/networking-incubator/coraza-kubernetes-operator
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: k8s.coraza.io
   group: waf
   kind: RuleSet
-  path: github.com/shaneutt/coraza-kubernetes-operator/api/v1alpha1
+  path: github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -25,6 +25,6 @@ resources:
   domain: k8s.coraza.io
   group: waf
   kind: Engine
-  path: github.com/shaneutt/coraza-kubernetes-operator/api/v1alpha1
+  path: github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1
   version: v1alpha1
 version: "3"
