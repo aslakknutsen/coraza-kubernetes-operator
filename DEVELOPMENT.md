@@ -1,13 +1,25 @@
-# Development Guide
+# Development
 
-## Environment
+# Contributing
+
+Contributions are welcome!
+
+For small issues, please feel free to submit a [pull request].
+
+For larger issues and features, please post a [discussion]
+describing what you're looking for so we can do some assessment first.
+
+[pull request]:https://github.com/networking-incubator/coraza-kubernetes-operator/pulls
+[discussion]:https://github.com/networking-incubator/coraza-kubernetes-operator/discussions
+
+# Development Environment
 
 A Kubernetes In Docker (KIND) cluster setup is provided. This will deploy
 Istio (to provide a `Gateway`) and deploy the Coraza Kubernetes Operator.
 
 > **Note**: Development and testing can be done on any Kubernetes cluster.
 
-### Development Setup
+## Setup
 
 Build your current changes:
 

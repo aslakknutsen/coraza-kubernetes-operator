@@ -7,9 +7,9 @@ Automated deployment and life-cycle management of [Coraza] on [Kubernetes].
 
 ## About
 
-The Coraza Kubernetes Operator enables declarative management of Coraza Web
-Application Firewall (WAF) policies in Kubernetes. It integrates the Coraza WAF
-engine with gateway/proxy solutions to enforce rules for Kubernetes cluster
+The Coraza Kubernetes Operator (CKO) enables declarative management of Coraza
+Web Application Firewall (WAF) policies in Kubernetes. It integrates the Coraza
+WAF engine with gateway/proxy solutions to enforce rules for Kubernetes cluster
 traffic.
 
 **Key Features:**
@@ -17,7 +17,9 @@ traffic.
 - `Engine` API to declaratively deploy WAF instances
 - `RuleSet` API to declaratively provide rules to WAF instances
 - Dynamic `RuleSet` updates
-- ModSec compatibility
+- [ModSecurity Seclang] compatibility
+
+[ModSecurity Seclang]:https://github.com/owasp-modsecurity/ModSecurity/wiki/Reference-Manual-(v3.x)
 
 ### Supported Integrations
 
@@ -50,6 +52,12 @@ kubectl apply -k config/default
 
 TODO
 
+#### Install via OperatorHub
+
+[TODO]
+
+[TODO]:https://github.com/redhat-openshift-ecosystem/community-operators-prod
+
 ### Firewall Deployment
 
 Firstly deploy your `RuleSets` which organize all your rules.
@@ -66,16 +74,9 @@ documentation for these APIs is available in the [API Documentation](todo).
 
 ## Contributing
 
-Contributions welcome!
+Contributions are welcome!
 
 See [Development](DEVELOPMENT.md).
-
-For bugs and smaller issues, feel free to create an issue and/or PRs.
-
-Please create a [GitHub Discussion] for any questions, or if you have a large
-feature you want to propose so we can discuss it together first.
-
-[GitHub Discussion]:https://github.com/shaneutt/coraza-kubernetes-operator/discussions
 
 ## License
 
