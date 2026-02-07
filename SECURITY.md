@@ -14,4 +14,4 @@ Please include:
 - A detailed description of the issue
 - Steps to reproduce the issue
 - Any relevant logs, screenshots, or POCs
-- Your conact information (optional)
+- Your contact information (optional)
