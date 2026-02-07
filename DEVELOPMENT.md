@@ -1,16 +1,8 @@
 # Development
 
-# Contributing
+Here we provide guides on develop of the CKO.
 
-Contributions are welcome!
-
-For small issues, please feel free to submit a [pull request].
-
-For larger issues and features, please post a [discussion]
-describing what you're looking for so we can do some assessment first.
-
-[pull request]:https://github.com/networking-incubator/coraza-kubernetes-operator/pulls
-[discussion]:https://github.com/networking-incubator/coraza-kubernetes-operator/discussions
+See also: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 # Development Environment
 
@@ -50,7 +42,7 @@ When you're done, you can destroy the cluster with:
 make clean.cluster.kind
 ```
 
-## Testing
+# Testing
 
 Run unit tests:
 

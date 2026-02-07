@@ -76,7 +76,7 @@ documentation for these APIs is available in the [API Documentation](todo).
 
 Contributions are welcome!
 
-See [Development](DEVELOPMENT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
