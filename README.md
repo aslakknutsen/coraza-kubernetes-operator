@@ -31,6 +31,25 @@ their gateways/proxies:
 
 > **Note**: Only Istio+Wasm is supported for now.
 
+### Architecture
+
+The CKO's `RuleSetController` responds to `RuleSet` resources by validating and
+compiling the rules, which gets emitted to a cache. The keys for the cache are
+the namespace/name of the `RuleSet`, allowing the compiled set of rules to be
+polled from a cache server hosting the cache.
+
+> **Note**: Currently, only [Seclang] rules are supported.
+
+The `EngineController` responds to `Engine` resources by deploying a WAF engine
+according to the type and mode provided, and attaching it to a `Gateway`. It
+targets a `RuleSet` to poll the compiled ruleset from the cache server and apply
+it to the `Engine`. Poll intervals are set so the rules can be dynamically
+updated over time.
+
+<img width="825" height="460" alt="cko-architecture-diagram" src="https://github.com/user-attachments/assets/e7b257e3-096f-4321-a40d-fe4e473480ac" />
+
+[Seclang]:https://github.com/owasp-modsecurity/ModSecurity/wiki/Reference-Manual-(v3.x)
+
 ## Usage
 
 Make sure your supported platform is deployed to the cluster, then choose one
