@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-function-docstring,missing-module-docstring
 # flake8: noqa: E501
+#
+# NOTE: generally you should run this from the Makefile ("make cluster.kind")
 
 import subprocess
 import argparse
