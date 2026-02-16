@@ -1,0 +1,56 @@
+image:
+  repository: ghcr.io/networking-incubator/coraza-kubernetes-operator
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+manager:
+  args:
+    leaderElect: true
+    healthProbeBindAddress: ":8081"
+    envoyClusterName: ""
+    cacheGCInterval: "3s"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 18080
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+istio:
+  enabled: false
+  revision: "coraza"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - "ALL"
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+imagePullSecrets: []
