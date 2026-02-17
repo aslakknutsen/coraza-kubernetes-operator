@@ -31,8 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/networking-incubator/coraza-kubernetes-operator/test/framework"
 )
 
 // -----------------------------------------------------------------------------
@@ -40,11 +40,15 @@ import (
 // -----------------------------------------------------------------------------
 
 var (
-	kindClusterName = os.Getenv("KIND_CLUSTER_NAME")
+	// fw is the test framework instance, available to all tests in this package.
+	fw *framework.Framework
+
+	// Legacy vars used by existing integration tests (integration_test.go).
+	// New tests should use fw.NewScenario(t) instead.
+	kindClusterName string
 
 	httpc = &http.Client{Timeout: 10 * time.Second}
 
-	restConfig    *rest.Config
 	kubeClient    *kubernetes.Clientset
 	dynamicClient dynamic.Interface
 	namespace     = "integration-tests"
@@ -59,7 +63,26 @@ var (
 // -----------------------------------------------------------------------------
 
 func TestMain(m *testing.M) {
-	setup()
+	if os.Getenv("KIND_CLUSTER_NAME") == "" {
+		panic("KIND_CLUSTER_NAME environment variable is required")
+	}
+
+	var err error
+	fw, err = framework.New()
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize test framework: %v", err))
+	}
+
+	kindClusterName = fw.ClusterName
+	dynamicClient = fw.DynamicClient
+
+	kubeClient, err = kubernetes.NewForConfig(fw.RestConfig)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create kubernetes clientset: %v", err))
+	}
+
+	setupPortForward()
+
 	code := m.Run()
 	cleanup()
 	os.Exit(code)
@@ -68,36 +91,6 @@ func TestMain(m *testing.M) {
 // -----------------------------------------------------------------------------
 // Integration Test Suite - Setup & Cleanup
 // -----------------------------------------------------------------------------
-
-func setup() {
-	if kindClusterName == "" {
-		panic("KIND_CLUSTER_NAME environment variable is required")
-	}
-
-	cmd := exec.Command("kind", "get", "kubeconfig", "--name", kindClusterName)
-	output, err := cmd.Output()
-	if err != nil {
-		panic(fmt.Sprintf("failed to get kind kubeconfig: %v", err))
-	}
-
-	config, err := clientcmd.RESTConfigFromKubeConfig(output)
-	if err != nil {
-		panic(fmt.Sprintf("failed to parse kubeconfig: %v", err))
-	}
-	restConfig = config
-
-	kubeClient, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create kubernetes client: %v", err))
-	}
-
-	dynamicClient, err = dynamic.NewForConfig(config)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create dynamic client: %v", err))
-	}
-
-	setupPortForward()
-}
 
 func cleanup() {
 	close(stopPortForward)
