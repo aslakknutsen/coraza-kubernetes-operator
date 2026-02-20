@@ -27,4 +27,13 @@ resources:
   kind: Engine
   path: github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: k8s.coraza.io
+  group: waf
+  kind: WAFPolicy
+  path: github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

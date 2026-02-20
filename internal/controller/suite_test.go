@@ -23,7 +23,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -32,6 +34,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 )
@@ -72,17 +75,24 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "Failed to add core scheme: %v\n", err)
 		os.Exit(1)
 	}
+	if err := gwapiv1.Install(scheme); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to add gateway-api scheme: %v\n", err)
+		os.Exit(1)
+	}
 
 	// The version used here MUST reflect the available versions at
 	// controller-runtime repo: https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/HEAD/envtest-releases.yaml
 	// If the envvar is not passed, the latest GA will be used
 	k8sVersion := os.Getenv("K8S_VERSION")
 
+	gwAPICRDPath := gatewayAPICRDPath()
+
 	testEnv = &envtest.Environment{
 		CRDInstallOptions: envtest.CRDInstallOptions{
 			Paths: []string{
 				filepath.Join("..", "..", "config", "crd", "bases"),
 				istioCRDDir,
+				gwAPICRDPath,
 			},
 			CleanUpAfterUse: true,
 		},
@@ -140,6 +150,14 @@ func setupTest(t *testing.T) (context.Context, func()) {
 	}
 
 	return ctx, cleanup
+}
+
+func gatewayAPICRDPath() string {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "sigs.k8s.io/gateway-api").Output()
+	if err != nil {
+		panic(fmt.Sprintf("failed to find gateway-api module: %v", err))
+	}
+	return filepath.Join(strings.TrimSpace(string(out)), "config", "crd", "standard")
 }
 
 func downloadIstioCRDs() (string, error) {

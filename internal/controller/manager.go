@@ -45,7 +45,7 @@ const DefaultRuleSetCacheServerPort = 18080
 // -----------------------------------------------------------------------------
 
 // SetupControllers initializes all controllers
-func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyClusterName string) error {
+func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyClusterName string, wafPolicyConfig WAFPolicyTranslatorConfig) error {
 	if err := (&RuleSetReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -62,6 +62,15 @@ func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyC
 		ruleSetCacheServerCluster: envoyClusterName,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller Engine: %w", err)
+	}
+
+	if err := (&WAFPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("wafpolicy-controller"),
+		Config:   wafPolicyConfig,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create controller WAFPolicy: %w", err)
 	}
 
 	return nil

@@ -44,11 +44,21 @@ rules:
   - update
   - watch
 - apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - httproutes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - waf.k8s.coraza.io
   resources:
   - engines
-  - rulesets
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -59,7 +69,19 @@ rules:
   resources:
   - engines/status
   - rulesets/status
+  - wafpolicies/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - waf.k8s.coraza.io
+  resources:
+  - rulesets
+  - wafpolicies
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch

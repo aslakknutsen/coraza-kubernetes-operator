@@ -1,0 +1,25 @@
+apiVersion: waf.k8s.coraza.io/v1alpha1
+kind: WAFPolicy
+metadata:
+  name: coraza
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: coraza-gateway
+  ruleSet:
+    name: default-ruleset
+  failurePolicy: fail
+---
+apiVersion: waf.k8s.coraza.io/v1alpha1
+kind: WAFPolicy
+metadata:
+  name: coraza-route
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: echo
+  ruleSet:
+    name: default-ruleset
+  failurePolicy: fail

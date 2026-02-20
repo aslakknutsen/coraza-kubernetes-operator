@@ -41,6 +41,7 @@ import (
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/controller"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -60,6 +61,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(wafv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(gwapiv1.Install(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -82,6 +84,8 @@ func main() {
 	var cacheMaxSize int
 	var cacheServerPort int
 	var envoyClusterName string
+	var defaultWasmImage string
+	var defaultPollInterval int
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -99,6 +103,8 @@ func main() {
 	flag.IntVar(&cacheMaxSize, "cache-max-size", cache.CacheMaxSize, fmt.Sprintf("Maximum total size of all cached rules in the RuleSet cache in bytes (default %dMB)", cache.CacheMaxSize/(1024*1024)))
 	flag.IntVar(&cacheServerPort, "cache-server-port", controller.DefaultRuleSetCacheServerPort, fmt.Sprintf("Port number for the RuleSet cache server to listen on (default %d)", controller.DefaultRuleSetCacheServerPort))
 	flag.StringVar(&envoyClusterName, "envoy-cluster-name", "", "The Envoy cluster name pointing to the RuleSet cache server (required)")
+	flag.StringVar(&defaultWasmImage, "default-wasm-image", "", "Default OCI image for the Coraza WASM plugin used by WAFPolicy translation (required)")
+	flag.IntVar(&defaultPollInterval, "default-poll-interval", 15, "Default poll interval in seconds for the RuleSet cache server used by WAFPolicy translation")
 
 	opts := zap.Options{
 		Development: true,
@@ -111,6 +117,11 @@ func main() {
 
 	if envoyClusterName == "" {
 		setupLog.Error(errors.New("missing required flag"), "envoy-cluster-name is required")
+		os.Exit(1)
+	}
+
+	if defaultWasmImage == "" {
+		setupLog.Error(errors.New("missing required flag"), "default-wasm-image is required")
 		os.Exit(1)
 	}
 
@@ -213,8 +224,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	wafPolicyConfig := controller.WAFPolicyTranslatorConfig{
+		DefaultWasmImage:    defaultWasmImage,
+		DefaultPollInterval: int32(defaultPollInterval),
+		EnvoyClusterName:    envoyClusterName,
+	}
+
 	// set up controllers
-	if err := controller.SetupControllers(mgr, rulesetCache, envoyClusterName); err != nil {
+	if err := controller.SetupControllers(mgr, rulesetCache, envoyClusterName, wafPolicyConfig); err != nil {
 		setupLog.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
