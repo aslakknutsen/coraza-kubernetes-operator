@@ -137,25 +137,3 @@ func serverSideApply(ctx context.Context, c client.Client, desired *unstructured
 	return nil
 }
 
-// serverSideApplyStatus applies an unstructured Kubernetes object's status
-// subresource using server-side apply. This is needed because the main
-// serverSideApply patches the resource itself, but Gateway status lives
-// on the status subresource which requires a separate patch call.
-func serverSideApplyStatus(ctx context.Context, c client.Client, desired *unstructured.Unstructured) error {
-	gvk := desired.GetObjectKind().GroupVersionKind()
-	if gvk.Empty() {
-		return errors.New("desired object must have GroupVersionKind set")
-	}
-
-	if desired.GetName() == "" {
-		return errors.New("desired object must have a name set")
-	}
-	if desired.GetNamespace() == "" {
-		desired.SetNamespace(corev1.NamespaceDefault)
-	}
-
-	if err := c.Status().Patch(ctx, desired, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
-		return fmt.Errorf("server-side apply status %s %s/%s: %w", gvk.Kind, desired.GetNamespace(), desired.GetName(), err)
-	}
-	return nil
-}

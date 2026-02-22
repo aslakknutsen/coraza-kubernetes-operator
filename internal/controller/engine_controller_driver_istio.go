@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,9 +67,10 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 		r.Recorder.Event(&engine, "Warning", "ProvisioningFailed", fmt.Sprintf("Failed to create WasmPlugin: %v", err))
 
 		degradedMsg := fmt.Sprintf("Failed to create or update WasmPlugin: %v", err)
-		r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionFalse, "EngineDegraded", fmt.Sprintf("Engine %s/%s: ProvisioningFailed - %s", engine.Namespace, engine.Name, degradedMsg))
+		targetGateways, _ := r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionFalse, "EngineDegraded", fmt.Sprintf("Engine %s/%s: ProvisioningFailed - %s", engine.Namespace, engine.Name, degradedMsg))
 		patch := client.MergeFrom(engine.DeepCopy())
 		setStatusConditionDegraded(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "ProvisioningFailed", degradedMsg)
+		engine.Status.TargetGateways = targetGateways
 		if updateErr := r.Status().Patch(ctx, &engine, patch); updateErr != nil {
 			logError(log, req, "Engine", updateErr, "Failed to patch status after provisioning failure")
 		}
@@ -78,7 +80,7 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	logInfo(log, req, "Engine", "WasmPlugin provisioned", "wasmNamespace", wasmPlugin.GetNamespace(), "wasmName", wasmPlugin.GetName())
 
 	logDebug(log, req, "Engine", "Updating status after successful provisioning")
-	targetGateways := r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionTrue, "EngineAttached", fmt.Sprintf("Engine %s/%s is ready", engine.Namespace, engine.Name))
+	targetGateways, gwErr := r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionTrue, "EngineAttached", fmt.Sprintf("Engine %s/%s is ready", engine.Namespace, engine.Name))
 	patch := client.MergeFrom(engine.DeepCopy())
 	setStatusReady(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "Configured", "WasmPlugin successfully created/updated")
 	engine.Status.TargetGateways = targetGateways
@@ -88,6 +90,9 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	}
 	r.Recorder.Event(&engine, "Normal", "WasmPluginCreated", fmt.Sprintf("Created WasmPlugin %s/%s", wasmPlugin.GetNamespace(), wasmPlugin.GetName()))
 
+	if gwErr != nil {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
 	return ctrl.Result{}, nil
 }
 

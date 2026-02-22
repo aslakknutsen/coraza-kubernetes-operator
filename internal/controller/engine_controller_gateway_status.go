@@ -148,56 +148,36 @@ func (r *EngineReconciler) setGatewayEngineCondition(
 }
 
 // removeGatewayEngineCondition removes the Engine's condition from the
-// Gateway's status. It does this by fetching the current Gateway status,
-// filtering out the engine's condition, and patching the result.
+// Gateway's status using server-side apply with an empty conditions list.
+// SSA removes only the entries owned by this engine's field manager,
+// leaving conditions set by other engines or controllers untouched.
 //
 // If the Gateway is not found (already deleted), this returns nil.
 func (r *EngineReconciler) removeGatewayEngineCondition(
 	ctx context.Context,
 	gatewayName, gatewayNamespace, engineName string,
 ) error {
-	gw := &unstructured.Unstructured{}
-	gw.SetGroupVersionKind(gatewayGVK)
-	if err := r.Get(ctx, types.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+	patch := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "gateway.networking.k8s.io/v1",
+			"kind":       "Gateway",
+			"metadata": map[string]interface{}{
+				"name":      gatewayName,
+				"namespace": gatewayNamespace,
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{},
+			},
+		},
+	}
+	patch.SetGroupVersionKind(gatewayGVK)
+
+	fm := fmt.Sprintf("%s/%s", fieldManager, engineName)
+	if err := r.Status().Patch(ctx, patch, client.Apply, client.FieldOwner(fm), client.ForceOwnership); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return err
-	}
-
-	condType := gatewayConditionType(engineName)
-
-	conditions, found, err := unstructured.NestedSlice(gw.Object, "status", "conditions")
-	if err != nil || !found {
-		return nil
-	}
-
-	var filtered []interface{}
-	for _, c := range conditions {
-		cond, ok := c.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if t, _ := cond["type"].(string); t == condType {
-			continue
-		}
-		filtered = append(filtered, c)
-	}
-
-	if len(filtered) == len(conditions) {
-		return nil
-	}
-
-	patch := client.MergeFrom(gw.DeepCopy())
-	if err := unstructured.SetNestedSlice(gw.Object, filtered, "status", "conditions"); err != nil {
-		return fmt.Errorf("failed to set filtered conditions: %w", err)
-	}
-
-	if err := r.Status().Patch(ctx, gw, patch); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to patch Gateway status to remove condition: %w", err)
+		return fmt.Errorf("failed to remove Gateway condition via SSA: %w", err)
 	}
 
 	return nil
@@ -209,7 +189,8 @@ func (r *EngineReconciler) removeGatewayEngineCondition(
 
 // reconcileGatewayStatus resolves the target Gateway and sets the appropriate
 // condition based on the Engine's current state. Returns the resolved gateway
-// info for recording in Engine status.
+// info for recording in Engine status and a non-nil error if the condition
+// could not be applied (callers should requeue on transient errors).
 func (r *EngineReconciler) reconcileGatewayStatus(
 	ctx context.Context,
 	log logr.Logger,
@@ -217,28 +198,29 @@ func (r *EngineReconciler) reconcileGatewayStatus(
 	engine *wafv1alpha1.Engine,
 	conditionStatus metav1.ConditionStatus,
 	reason, message string,
-) []wafv1alpha1.TargetGatewayStatus {
+) ([]wafv1alpha1.TargetGatewayStatus, error) {
 	gwName, gwNamespace := resolveTargetGateway(engine)
 	if gwName == "" {
-		return nil
+		return nil, nil
 	}
 
 	logDebug(log, req, "Engine", "Resolved target Gateway", "gatewayName", gwName, "gatewayNamespace", gwNamespace)
 
 	if err := r.ensureFinalizer(ctx, engine); err != nil {
 		logError(log, req, "Engine", err, "Failed to add finalizer")
-		return nil
+		return nil, fmt.Errorf("failed to ensure gateway cleanup finalizer: %w", err)
 	}
 
 	attached := true
+	var retErr error
 	if err := r.setGatewayEngineCondition(ctx, gwName, gwNamespace, engine, conditionStatus, reason, message); err != nil {
+		attached = false
 		if apierrors.IsNotFound(err) {
 			logInfo(log, req, "Engine", "Target Gateway not found", "gatewayName", gwName)
 			r.Recorder.Event(engine, "Warning", "GatewayNotFound", fmt.Sprintf("Target Gateway %s/%s not found", gwNamespace, gwName))
-			attached = false
 		} else {
 			logError(log, req, "Engine", err, "Failed to set Gateway condition", "gatewayName", gwName)
-			attached = false
+			retErr = fmt.Errorf("failed to set Gateway condition: %w", err)
 		}
 	} else {
 		logInfo(log, req, "Engine", "Set condition on Gateway", "gatewayName", gwName, "conditionStatus", conditionStatus)
@@ -248,7 +230,7 @@ func (r *EngineReconciler) reconcileGatewayStatus(
 		Name:      gwName,
 		Namespace: gwNamespace,
 		Attached:  attached,
-	}}
+	}}, retErr
 }
 
 // -----------------------------------------------------------------------------
@@ -285,13 +267,25 @@ func (r *EngineReconciler) handleDeletion(
 
 	logInfo(log, req, "Engine", "Processing deletion finalizer")
 
-	gwName, gwNamespace := resolveTargetGateway(engine)
-	if gwName != "" {
-		if err := r.removeGatewayEngineCondition(ctx, gwName, gwNamespace, engine.Name); err != nil {
+	// Use status as the authoritative record of which gateways actually have
+	// conditions. Fall back to spec-based resolution for the case where the
+	// finalizer was added but reconciliation never wrote status.
+	var gateways []wafv1alpha1.TargetGatewayStatus
+	if len(engine.Status.TargetGateways) > 0 {
+		gateways = engine.Status.TargetGateways
+	} else {
+		gwName, gwNamespace := resolveTargetGateway(engine)
+		if gwName != "" {
+			gateways = []wafv1alpha1.TargetGatewayStatus{{Name: gwName, Namespace: gwNamespace}}
+		}
+	}
+
+	for _, gw := range gateways {
+		if err := r.removeGatewayEngineCondition(ctx, gw.Name, gw.Namespace, engine.Name); err != nil {
 			logError(log, req, "Engine", err, "Failed to remove Gateway condition during cleanup")
 			return true, err
 		}
-		logInfo(log, req, "Engine", "Removed condition from Gateway", "gatewayName", gwName)
+		logInfo(log, req, "Engine", "Removed condition from Gateway", "gatewayName", gw.Name)
 	}
 
 	patch := client.MergeFrom(engine.DeepCopy())
