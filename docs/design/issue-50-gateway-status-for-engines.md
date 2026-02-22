@@ -79,13 +79,17 @@ pods backing a Gateway API Gateway resource.
 
 The Engine controller resolves the target Gateway by:
 
-1. Extracting the value of `gateway.networking.k8s.io/gateway-name`
-   from `spec.driver.istio.wasm.workloadSelector.matchLabels`.
-2. Looking up the Gateway by that name in the Engine's namespace.
+1. Checking that `spec.driver.istio.wasm.workloadSelector` is non-nil.
+   The field is `*metav1.LabelSelector` and is `+optional`, so nil is
+   a valid state. If nil, skip Gateway resolution.
+2. Extracting the value of `gateway.networking.k8s.io/gateway-name`
+   from `workloadSelector.matchLabels`.
+3. Looking up the Gateway by that name in the Engine's namespace.
 
-If the label is absent from `matchLabels`, the controller cannot resolve
-a Gateway and skips status updates. This is a valid scenario (the user
-might target non-Gateway workloads). No error is raised.
+If `workloadSelector` is nil, or uses only `matchExpressions` without
+a `matchLabels` entry for the gateway name label, the controller cannot
+resolve a Gateway and skips status updates. This is a valid scenario
+(the user might target non-Gateway workloads). No error is raised.
 
 If the resolved Gateway doesn't exist, the Engine records a warning
 event and sets its own status to Degraded with reason
@@ -134,6 +138,13 @@ reconciler and is harder to reason about.
 
 Finalizer name: `waf.k8s.coraza.io/gateway-status-cleanup`
 
+**Edge case: Gateway deleted before Engine.** If the Gateway is already
+gone when the finalizer runs, the cleanup call to remove the condition
+will get a NotFound error. The finalizer logic must treat NotFound as
+success (there's nothing left to clean up) and proceed to remove the
+finalizer. Failing to handle this would block Engine deletion
+indefinitely.
+
 ### 2.5 Controller Changes
 
 **Engine controller (`engine_controller.go`):**
@@ -144,7 +155,14 @@ Finalizer name: `waf.k8s.coraza.io/gateway-status-cleanup`
   from the Gateway, then remove the finalizer.
 - Add a watch on Gateways to re-trigger Engine reconciliation when a
   Gateway is created/updated/deleted (so the Engine can re-apply its
-  condition if the Gateway was recreated).
+  condition if the Gateway was recreated). The watch uses an
+  `handler.EnqueueRequestsFromMapFunc` that, given a Gateway event,
+  lists all Engines in the same namespace and filters to those whose
+  `workloadSelector.matchLabels` contain
+  `gateway.networking.k8s.io/gateway-name` matching the Gateway's name.
+  This reverse lookup can use a client list with a field or label
+  selector, or a simple list-and-filter (the number of Engines per
+  namespace is expected to be small).
 
 **New file: `engine_controller_gateway_status.go`:**
 
@@ -154,8 +172,13 @@ Encapsulate Gateway resolution and status update logic:
 - `setGatewayEngineCondition(ctx, gateway, engine, conditionStatus, reason, message) error`
 - `removeGatewayEngineCondition(ctx, gatewayName, gatewayNamespace, engineName) error`
 
-All Gateway access uses `unstructured.Unstructured` with SSA, consistent
-with how `WasmPlugin` is handled today.
+All Gateway status access uses `unstructured.Unstructured` with SSA.
+
+**Important:** The existing `serverSideApply()` helper in `utils.go` uses
+`c.Patch()`, which patches the main resource. Gateway status lives on
+the status subresource, so the new code must use `c.Status().Patch()`
+instead. A new helper (e.g. `serverSideApplyStatus`) should be added
+rather than reusing `serverSideApply()` directly.
 
 **RBAC additions:**
 
@@ -239,9 +262,15 @@ Rejected because:
 3. **Condition type naming for multiple engines.** Using
    `waf.k8s.coraza.io/EngineReady-<engine-name>` embeds the engine name
    in the condition type. Kubernetes condition types are typically static
-   strings. This is unconventional but not prohibited. Alternative:
-   use a single condition type and encode multi-engine info in the
-   message. Needs maintainer input.
+   strings. This is unconventional but not prohibited by the API.
+
+   Recommendation: use the per-engine condition type as proposed. The
+   alternatives (single aggregated condition, or encoding in message)
+   all lose information or create ownership coordination problems
+   between Engine reconcilers. The per-engine type is the lesser cost.
+   If this turns out to cause friction with tooling that expects static
+   types, it can be revisited when Policy Attachment (#59) lands and
+   replaces this mechanism entirely.
 
 4. **Gateway controller compatibility.** Tested assumption: Istio's
    gateway controller does not strip unknown conditions from Gateway
