@@ -138,6 +138,34 @@ type EngineStatus struct {
 	// +patchMergeKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// TargetGateways records the Gateway resources this Engine has resolved
+	// and whether it has successfully applied its status condition to each.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	TargetGateways []TargetGatewayStatus `json:"targetGateways,omitempty"`
+}
+
+// TargetGatewayStatus records the resolved Gateway reference and whether
+// the Engine condition was successfully applied to the Gateway's status.
+type TargetGatewayStatus struct {
+	// Name of the target Gateway.
+	//
+	// +required
+	Name string `json:"name"`
+
+	// Namespace of the target Gateway.
+	//
+	// +required
+	Namespace string `json:"namespace"`
+
+	// Attached indicates whether the Engine condition was successfully
+	// applied to this Gateway's status.
+	//
+	// +required
+	Attached bool `json:"attached"`
 }
 
 // -----------------------------------------------------------------------------

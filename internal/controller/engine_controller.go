@@ -27,14 +27,17 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 )
@@ -68,9 +71,13 @@ func (r *EngineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Kind:    "WasmPlugin",
 	})
 
+	gateway := &unstructured.Unstructured{}
+	gateway.SetGroupVersionKind(gatewayGVK)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&wafv1alpha1.Engine{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(wasmPlugin).
+		Watches(gateway, handler.EnqueueRequestsFromMapFunc(r.findEnginesForGateway)).
 		WithOptions(controller.Options{
 			RateLimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](
 				1*time.Second,
@@ -79,6 +86,34 @@ func (r *EngineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Named("engine").
 		Complete(r)
+}
+
+// findEnginesForGateway maps a Gateway event to all Engines in the same
+// namespace that target it (via workloadSelector matchLabels containing the
+// gateway name label).
+func (r *EngineReconciler) findEnginesForGateway(ctx context.Context, gw client.Object) []reconcile.Request {
+	log := logf.FromContext(ctx)
+
+	var engineList wafv1alpha1.EngineList
+	if err := r.List(ctx, &engineList, client.InNamespace(gw.GetNamespace())); err != nil {
+		log.Error(err, "Engine: Failed to list Engines for Gateway watch", "namespace", gw.GetNamespace())
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, engine := range engineList.Items {
+		gwName, _ := resolveTargetGateway(&engine)
+		if gwName == gw.GetName() {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      engine.Name,
+					Namespace: engine.Namespace,
+				},
+			})
+		}
+	}
+
+	return requests
 }
 
 // -----------------------------------------------------------------------------
@@ -99,6 +134,11 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 		logError(log, req, "Engine", err, "Failed to get")
 		return ctrl.Result{Requeue: true}, err
+	}
+
+	deleting, err := r.handleDeletion(ctx, log, req, &engine)
+	if deleting || err != nil {
+		return ctrl.Result{}, err
 	}
 
 	logDebug(log, req, "Engine", "Applying conditions")

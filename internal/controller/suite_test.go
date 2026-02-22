@@ -153,10 +153,33 @@ func downloadIstioCRDs() (string, error) {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	wasmPluginURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/refs/tags/%s/manifests/charts/base/files/crd-all.gen.yaml", istioVersion)
-	resp, err := http.Get(wasmPluginURL)
+	downloads := []struct {
+		url      string
+		filename string
+	}{
+		{
+			url:      fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/refs/tags/%s/manifests/charts/base/files/crd-all.gen.yaml", istioVersion),
+			filename: "istio-crds.yaml",
+		},
+		{
+			url:      "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/refs/heads/main/config/crd/standard/gateway.networking.k8s.io_gateways.yaml",
+			filename: "gateway-api-gateways.yaml",
+		},
+	}
+
+	for _, dl := range downloads {
+		if err := downloadFile(dl.url, filepath.Join(tmpDir, dl.filename)); err != nil {
+			return "", err
+		}
+	}
+
+	return tmpDir, nil
+}
+
+func downloadFile(url, destPath string) error {
+	resp, err := http.Get(url)
 	if err != nil {
-		return "", fmt.Errorf("failed to download Istio CRDs: %w", err)
+		return fmt.Errorf("failed to download %s: %w", url, err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -165,13 +188,12 @@ func downloadIstioCRDs() (string, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download Istio CRDs: HTTP %d", resp.StatusCode)
+		return fmt.Errorf("failed to download %s: HTTP %d", url, resp.StatusCode)
 	}
 
-	crdFile := filepath.Join(tmpDir, "istio-crds.yaml")
-	f, err := os.Create(crdFile)
+	f, err := os.Create(destPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to create CRD file: %w", err)
+		return fmt.Errorf("failed to create file %s: %w", destPath, err)
 	}
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
@@ -180,8 +202,8 @@ func downloadIstioCRDs() (string, error) {
 	}()
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
-		return "", fmt.Errorf("failed to write CRD file: %w", err)
+		return fmt.Errorf("failed to write file %s: %w", destPath, err)
 	}
 
-	return tmpDir, nil
+	return nil
 }

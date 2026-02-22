@@ -320,6 +320,35 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              targetGateways:
+                description: |-
+                  TargetGateways records the Gateway resources this Engine has resolved
+                  and whether it has successfully applied its status condition to each.
+                items:
+                  description: |-
+                    TargetGatewayStatus records the resolved Gateway reference and whether
+                    the Engine condition was successfully applied to the Gateway's status.
+                  properties:
+                    attached:
+                      description: |-
+                        Attached indicates whether the Engine condition was successfully
+                        applied to this Gateway's status.
+                      type: boolean
+                    name:
+                      description: Name of the target Gateway.
+                      type: string
+                    namespace:
+                      description: Namespace of the target Gateway.
+                      type: string
+                  required:
+                  - attached
+                  - name
+                  - namespace
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

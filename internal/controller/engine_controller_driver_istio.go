@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -64,8 +65,10 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 		logError(log, req, "Engine", err, "Failed to create or update WasmPlugin")
 		r.Recorder.Event(&engine, "Warning", "ProvisioningFailed", fmt.Sprintf("Failed to create WasmPlugin: %v", err))
 
+		degradedMsg := fmt.Sprintf("Failed to create or update WasmPlugin: %v", err)
+		r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionFalse, "EngineDegraded", fmt.Sprintf("Engine %s/%s: ProvisioningFailed - %s", engine.Namespace, engine.Name, degradedMsg))
 		patch := client.MergeFrom(engine.DeepCopy())
-		setStatusConditionDegraded(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "ProvisioningFailed", fmt.Sprintf("Failed to create or update WasmPlugin: %v", err))
+		setStatusConditionDegraded(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "ProvisioningFailed", degradedMsg)
 		if updateErr := r.Status().Patch(ctx, &engine, patch); updateErr != nil {
 			logError(log, req, "Engine", updateErr, "Failed to patch status after provisioning failure")
 		}
@@ -75,8 +78,10 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	logInfo(log, req, "Engine", "WasmPlugin provisioned", "wasmNamespace", wasmPlugin.GetNamespace(), "wasmName", wasmPlugin.GetName())
 
 	logDebug(log, req, "Engine", "Updating status after successful provisioning")
+	targetGateways := r.reconcileGatewayStatus(ctx, log, req, &engine, metav1.ConditionTrue, "EngineAttached", fmt.Sprintf("Engine %s/%s is ready", engine.Namespace, engine.Name))
 	patch := client.MergeFrom(engine.DeepCopy())
 	setStatusReady(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "Configured", "WasmPlugin successfully created/updated")
+	engine.Status.TargetGateways = targetGateways
 	if err := r.Status().Patch(ctx, &engine, patch); err != nil {
 		logError(log, req, "Engine", err, "Failed to patch status")
 		return ctrl.Result{}, err
