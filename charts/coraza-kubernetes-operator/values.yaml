@@ -1,3 +1,5 @@
+createNamespace: true
+
 image:
   repository: ghcr.io/networking-incubator/coraza-kubernetes-operator
   tag: latest
