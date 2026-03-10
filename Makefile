@@ -114,7 +114,7 @@ run: manifests generate fmt vet
 
 .PHONY: manifests
 manifests: controller-gen
-	"$(CONTROLLER_GEN)" rbac:roleName=coraza-controller-manager crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	"$(CONTROLLER_GEN)" rbac:roleName=coraza-controller-manager crd webhook paths="./..." output:crd:artifacts:config=$(HELM_CHART_DIR)/crds
 
 .PHONY: generate
 generate: controller-gen
@@ -267,10 +267,6 @@ helm.lint: ## Lint the Helm chart
 helm.template: ## Render the Helm chart templates locally
 	helm template coraza-kubernetes-operator $(HELM_CHART_DIR) --namespace coraza-system
 
-.PHONY: helm.sync-crds
-helm.sync-crds: manifests ## Copy generated CRDs into the Helm chart
-	cp config/crd/bases/*.yaml $(HELM_CHART_DIR)/crds/
-
 .PHONY: helm.sync-rbac
 helm.sync-rbac: manifests ## Sync generated RBAC rules into the Helm chart ClusterRole
 	@GEN=config/rbac/role.yaml; \
@@ -280,7 +276,7 @@ helm.sync-rbac: manifests ## Sync generated RBAC rules into the Helm chart Clust
 	mv "$$CHART.tmp" "$$CHART"
 
 .PHONY: helm.sync
-helm.sync: helm.sync-crds helm.sync-rbac ## Sync all generated resources into the Helm chart
+helm.sync: helm.sync-rbac ## Sync all generated resources into the Helm chart
 
 # -------------------------------------------------------------------------------
 # Dependencies
