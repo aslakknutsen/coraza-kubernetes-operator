@@ -9,7 +9,7 @@ The operator is one half of a two-repo system. The other half is a WASM plugin (
 ## API Stability
 
 - API is `v1alpha1`. New fields are typically backward-compatible only when optional (`omitempty`) and/or safely defaulted, and when validation does not reject previously-valid objects; removals or renames are breaking. Review any API type, defaulting, or validation change for backward compatibility.
-- CRD changes must be accompanied by running `make manifests` — generated CRD YAML in `config/crd/bases/` must stay in sync with Go types.
+- CRD changes must be accompanied by running `make manifests` — generated CRD YAML in `charts/coraza-kubernetes-operator/crds/` must stay in sync with Go types.
 - Deep copy must be regenerated: `make generate`. Check for uncommitted generated file diffs.
 
 ## Cross-Namespace References
