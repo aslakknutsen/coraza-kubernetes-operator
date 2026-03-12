@@ -194,7 +194,7 @@ LOCALRULES ?= $(shell pwd)/tmp/rules
 CORERULESET_DIR ?= $(shell pwd)/tmp/coreruleset
 TMP_DOWNLOAD_DIR ?= $(shell pwd)/tmp/download
 NAMESPACE ?= default
-CORERULESET_EXTRA_FLAGS ?= --ignore-pmFromFile
+CORERULESET_EXTRA_FLAGS ?=
 
 $(LOCALRULES):
 	mkdir -p "$(LOCALRULES)"
@@ -221,13 +221,11 @@ coraza.coreruleset: coraza.generaterules
 	kubectl delete -n $(NAMESPACE) --ignore-not-found -f $(LOCALRULES)/*.yaml
 	kubectl apply -n $(NAMESPACE) --server-side -f $(LOCALRULES)/*.yaml
 
-# TODO: Deploy a Gateway, set port-forward and log-forward and run ftw passing the right flags
 # -------------------------------------------------------------------------------
 # Coraza Coreruleset - FTW testing
 # -------------------------------------------------------------------------------
 
 FTW_NAMESPACE ?= ftw-test
-# TODO: we should get this from the created manifests
 GATEWAY_NAME ?= coraza-gateway 
 FTW_OUTPUT_FORMAT ?= plain
 FTW_EXTRA_ARGS ?= 
@@ -237,11 +235,11 @@ ftw.environment: cluster.kind
 	kubectl delete ns --ignore-not-found $(FTW_NAMESPACE)
 	kubectl create ns $(FTW_NAMESPACE)
 	kubectl apply -n $(FTW_NAMESPACE) -f config/samples/
-	kubectl wait deploy -n $(FTW_NAMESPACE) -l gateway.networking.k8s.io/gateway-name=$(GATEWAY_NAME) --for=condition=Available
+	kubectl wait deploy -n $(FTW_NAMESPACE) -l gateway.networking.k8s.io/gateway-name=$(GATEWAY_NAME) --timeout=2m --for=condition=Available
 
 .PHONY: ftw.coreruleset
 ftw.coreruleset:
-	$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule --ignore-pmFromFile" NAMESPACE=$(FTW_NAMESPACE) coraza.coreruleset
+	$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule" NAMESPACE=$(FTW_NAMESPACE) coraza.coreruleset
 
 .PHONY: ftw.run
 ftw.run: coraza.coreruleset.download
