@@ -13,7 +13,7 @@
 
 The Coraza Kubernetes Operator (CKO) enables declarative management of [Web
 Application Firewalls (WAF)] on Kubernetes clusters. Users can deploy
-firewall engines which are attached to gateways, and rules which those
+firewall engines which are attached to `Gateways`, and rules which those
 engines enforce.
 
 [Coraza] is used as the firewall engine.
