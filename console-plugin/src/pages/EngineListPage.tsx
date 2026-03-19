@@ -4,7 +4,6 @@ import {
 } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router-dom';
 import {
-  Page,
   PageSection,
   Title,
   Bullseye,
@@ -38,7 +37,7 @@ export default function EngineListPage() {
   const items = engines ?? [];
 
   return (
-    <Page>
+    <>
       <PageSection>
         <Title headingLevel="h1">Engines</Title>
       </PageSection>
@@ -82,6 +81,6 @@ export default function EngineListPage() {
           </table>
         )}
       </PageSection>
-    </Page>
+    </>
   );
 }

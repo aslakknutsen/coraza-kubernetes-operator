@@ -5,7 +5,6 @@ import {
 } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router-dom';
 import {
-  Page,
   PageSection,
   Title,
   Card,
@@ -56,7 +55,7 @@ export default function EngineDetailPage() {
   const gateways = engine.status?.gateways ?? [];
 
   return (
-    <Page>
+    <>
       <PageSection>
         <Breadcrumb>
           <BreadcrumbItem>
@@ -161,6 +160,6 @@ export default function EngineDetailPage() {
           </CardBody>
         </Card>
       </PageSection>
-    </Page>
+    </>
   );
 }

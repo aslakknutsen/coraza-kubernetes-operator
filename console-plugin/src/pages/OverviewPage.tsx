@@ -4,7 +4,6 @@ import {
 } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router-dom';
 import {
-  Page,
   PageSection,
   Title,
   Card,
@@ -50,7 +49,7 @@ export default function OverviewPage() {
   const ruleSetList = ruleSets ?? [];
 
   return (
-    <Page>
+    <>
       <PageSection>
         <Title headingLevel="h1">Coraza WAF Overview</Title>
       </PageSection>
@@ -123,6 +122,6 @@ export default function OverviewPage() {
           </CardBody>
         </Card>
       </PageSection>
-    </Page>
+    </>
   );
 }
