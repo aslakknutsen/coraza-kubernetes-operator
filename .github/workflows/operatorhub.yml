@@ -1,0 +1,59 @@
+name: operatorhub
+
+permissions: read-all
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-operatorhub:
+    name: submit bundle to community-operators
+    runs-on: ubuntu-latest
+    # All v0.x releases are marked as pre-releases by release.yml, so this
+    # workflow will not trigger until v1.0.0+. This is intentional — unstable
+    # versions should not be published to OperatorHub.
+    if: ${{ !github.event.release.prerelease }}
+    steps:
+      - name: checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: set up go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: set up helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: set up python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: install python dependencies
+        run: pip install -r hack/requirements.txt
+        if: hashFiles('hack/requirements.txt') != ''
+
+      - name: generate OLM bundle
+        run: make bundle VERSION=${{ github.event.release.tag_name }}
+
+      - name: extract version
+        id: version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "bare=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: submit to community-operators
+        env:
+          GITHUB_TOKEN: ${{ secrets.OPERATORHUB_TOKEN }}
+          GIT_USER: ${{ vars.OPERATORHUB_GIT_USER }}
+          GIT_EMAIL: ${{ vars.OPERATORHUB_GIT_EMAIL }}
+        run: |
+          hack/publish_operatorhub.sh \
+            --version "${{ steps.version.outputs.bare }}" \
+            --fork "${{ vars.OPERATORHUB_FORK_OWNER }}"

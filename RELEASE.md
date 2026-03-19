@@ -188,3 +188,30 @@ Make sure the latest release announcement is pinned, and older release
 announcements get unpinned.
 
 [immutable releases]:https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases
+
+### Step 6 - OperatorHub
+
+When a non-prerelease is published, the [`operatorhub.yml`] workflow
+automatically:
+
+> **Note**: All `v0.x.x` releases are marked as pre-releases by
+> `release.yml`, so the OperatorHub workflow will not trigger until
+> `v1.0.0` or later. To submit a `v0.x` release manually, run
+> `hack/publish_operatorhub.sh` locally (see `--help`).
+
+1. Generates the OLM bundle for the release version
+2. Opens a PR to [`k8s-operatorhub/community-operators`] with the bundle
+
+After publishing the release, check the [Actions page] for the
+`operatorhub` workflow run and monitor the resulting PR on
+community-operators for CI feedback.
+
+> **Note**: The workflow requires these repository secrets and variables:
+> - Secret `OPERATORHUB_TOKEN` — PAT with `repo` scope for the fork account
+> - Variable `OPERATORHUB_GIT_USER` — GitHub username for commits/sign-off
+> - Variable `OPERATORHUB_GIT_EMAIL` — Email for DCO sign-off
+> - Variable `OPERATORHUB_FORK_OWNER` — Owner of the community-operators fork
+
+[`operatorhub.yml`]:https://github.com/networking-incubator/coraza-kubernetes-operator/blob/main/.github/workflows/operatorhub.yml
+[`k8s-operatorhub/community-operators`]:https://github.com/k8s-operatorhub/community-operators
+[Actions page]:https://github.com/networking-incubator/coraza-kubernetes-operator/actions

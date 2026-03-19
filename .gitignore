@@ -47,6 +47,7 @@ dist/*
 # templates
 !.github/*.md
 !.github/**/*.md
+!hack/operatorhub-pr-template.md
 
 # helm chart
 !charts/**/NOTES.txt
