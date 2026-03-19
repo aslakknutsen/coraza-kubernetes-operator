@@ -5,7 +5,6 @@ import {
 } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router-dom';
 import {
-  Page,
   PageSection,
   Title,
   Card,
@@ -52,7 +51,7 @@ export default function RuleSetDetailPage() {
   }
 
   return (
-    <Page>
+    <>
       <PageSection>
         <Breadcrumb>
           <BreadcrumbItem>
@@ -125,6 +124,6 @@ export default function RuleSetDetailPage() {
           </CardBody>
         </Card>
       </PageSection>
-    </Page>
+    </>
   );
 }

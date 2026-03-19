@@ -4,7 +4,6 @@ import {
 } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router-dom';
 import {
-  Page,
   PageSection,
   Title,
   Bullseye,
@@ -38,7 +37,7 @@ export default function RuleSetListPage() {
   const items = ruleSets ?? [];
 
   return (
-    <Page>
+    <>
       <PageSection>
         <Title headingLevel="h1">RuleSets</Title>
       </PageSection>
@@ -76,6 +75,6 @@ export default function RuleSetListPage() {
           </table>
         )}
       </PageSection>
-    </Page>
+    </>
   );
 }
