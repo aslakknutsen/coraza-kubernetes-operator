@@ -96,6 +96,10 @@ release.kubectl-plugin: ## Cross-build kubectl-coraza binaries into dist/ (linux
 	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-amd64 ./cmd/kubectl-coraza
 	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-arm64 ./cmd/kubectl-coraza
 
+.PHONY: release.operatorhub
+release.operatorhub: ## Submit OLM bundle to OperatorHub community-operators
+	hack/publish_operatorhub.sh --version $(VERSION:v%=%)
+
 # ------------------------------------------------------------------------------
 # Deployment
 # ------------------------------------------------------------------------------
