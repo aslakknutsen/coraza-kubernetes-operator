@@ -93,3 +93,8 @@ tools/github_project_manager/github_project_manager
 /kubectl-coraza
 
 !design/**/*.md
+
+# Console plugin
+console-plugin/node_modules/
+console-plugin/dist/
+console-plugin/.yarn/
