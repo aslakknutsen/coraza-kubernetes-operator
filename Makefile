@@ -336,8 +336,8 @@ CONSOLE_PLUGIN_IMAGE_TAG ?= $(VERSION)
 CONSOLE_PLUGIN_IMAGE ?= $(CONSOLE_PLUGIN_IMAGE_BASE):$(CONSOLE_PLUGIN_IMAGE_TAG)
 
 .PHONY: console-plugin.build
-console-plugin.build: ## Build the console plugin
-	cd $(CONSOLE_PLUGIN_DIR) && yarn install && yarn build
+console-plugin.build: yarn ## Build the console plugin
+	cd $(CONSOLE_PLUGIN_DIR) && "$(YARN)" install && "$(YARN)" build
 
 .PHONY: console-plugin.build.image
 console-plugin.build.image: ## Build the console plugin container image
@@ -389,10 +389,12 @@ KIND ?= kind
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+YARN ?= $(LOCALBIN)/yarn
 
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 GOLANGCI_LINT_VERSION ?= v2.5.0
 OPERATOR_SDK_VERSION ?= v1.42.0
+YARN_VERSION ?= v1.22.22
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN)
@@ -404,6 +406,7 @@ golangci-lint: $(GOLANGCI_LINT)
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+<<<<<<< HEAD
 .PHONY: operator-sdk
 operator-sdk: $(OPERATOR_SDK)
 $(OPERATOR_SDK): $(LOCALBIN)
@@ -420,6 +423,18 @@ $(OPERATOR_SDK): $(LOCALBIN)
 	chmod +x "$(OPERATOR_SDK)-$(OPERATOR_SDK_VERSION)"; \
 	}
 	@ln -sf "$$(realpath "$(OPERATOR_SDK)-$(OPERATOR_SDK_VERSION)")" "$(OPERATOR_SDK)"
+
+.PHONY: yarn
+yarn: $(YARN)
+$(YARN): $(LOCALBIN)
+	@[ -f "$(YARN)-$(YARN_VERSION)" ] || { \
+	set -e; \
+	echo "Downloading yarn $(YARN_VERSION)"; \
+	curl -sSL https://github.com/yarnpkg/yarn/releases/download/$(YARN_VERSION)/yarn-$(YARN_VERSION).tar.gz | tar xz -C $(LOCALBIN); \
+	mv "$(LOCALBIN)/yarn-$(YARN_VERSION)" "$(LOCALBIN)/.yarn-dist-$(YARN_VERSION)"; \
+	ln -sf "$(LOCALBIN)/.yarn-dist-$(YARN_VERSION)/bin/yarn" "$(YARN)-$(YARN_VERSION)"; \
+	}
+	@ln -sf "$(YARN)-$(YARN_VERSION)" "$(YARN)"
 
 define go-install-tool
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \
