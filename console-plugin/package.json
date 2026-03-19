@@ -46,6 +46,9 @@
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.3"
   },
+  "resolutions": {
+    "@types/react": "^17.0.37"
+  },
   "consolePlugin": {
     "name": "coraza-console-plugin",
     "version": "0.0.1",

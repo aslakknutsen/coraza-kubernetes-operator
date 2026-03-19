@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   useK8sWatchResource,
   useActiveNamespace,
@@ -61,9 +60,7 @@ export default function EngineListPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((e) => {
-                const wasm = e.spec.driver.istio?.wasm;
-                return (
+              {items.map((e) => (
                   <tr key={`${e.metadata?.namespace}-${e.metadata?.name}`}>
                     <td>
                       <Link to={`/coraza/engines/${e.metadata?.name}?ns=${e.metadata?.namespace}`}>
@@ -80,8 +77,7 @@ export default function EngineListPage() {
                     <td>{e.status?.gateways?.length ?? 0}</td>
                     <td><StatusLabel status={getReadyStatus(e.status?.conditions)} /></td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         )}
