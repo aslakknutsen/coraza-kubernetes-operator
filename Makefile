@@ -326,6 +326,28 @@ catalog.undeploy: ## Remove the CatalogSource CR from the cluster
 	kubectl delete catalogsource coraza-kubernetes-operator -n $(CATALOG_NAMESPACE) --ignore-not-found
 
 # -------------------------------------------------------------------------------
+# Console Plugin
+# -------------------------------------------------------------------------------
+
+CONSOLE_PLUGIN_DIR ?= console-plugin
+CONSOLE_PLUGIN_CHART_DIR ?= charts/coraza-console-plugin
+CONSOLE_PLUGIN_IMAGE_BASE ?= ghcr.io/networking-incubator/coraza-console-plugin
+CONSOLE_PLUGIN_IMAGE_TAG ?= $(VERSION)
+CONSOLE_PLUGIN_IMAGE ?= $(CONSOLE_PLUGIN_IMAGE_BASE):$(CONSOLE_PLUGIN_IMAGE_TAG)
+
+.PHONY: console-plugin.build
+console-plugin.build: ## Build the console plugin
+	cd $(CONSOLE_PLUGIN_DIR) && yarn install && yarn build
+
+.PHONY: console-plugin.build.image
+console-plugin.build.image: ## Build the console plugin container image
+	$(CONTAINER_TOOL) build -t $(CONSOLE_PLUGIN_IMAGE) $(CONSOLE_PLUGIN_DIR)
+
+.PHONY: console-plugin.lint
+console-plugin.lint: ## Lint the console plugin Helm chart
+	helm lint $(CONSOLE_PLUGIN_CHART_DIR)
+
+# -------------------------------------------------------------------------------
 # Helm
 # -------------------------------------------------------------------------------
 
