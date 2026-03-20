@@ -22,7 +22,8 @@ METALLB_VERSION ?= 0.15.3
 METALLB_POOL_SIZE ?= 128 # Defines the size of MetalLB pool, when being used
 
 VERSION ?= v0.0.0-dev
-CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE ?= ghcr.io/networking-incubator/coraza-kubernetes-operator
+IMAGE_REGISTRY ?= ghcr.io/networking-incubator
+CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE ?= $(IMAGE_REGISTRY)/coraza-kubernetes-operator
 CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG ?= $(VERSION)
 CONTROLLER_MANAGER_CONTAINER_IMAGE ?= ${CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE}:${CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG}
 
@@ -243,11 +244,11 @@ test.conformance:
 # OLM Bundle
 # -------------------------------------------------------------------------------
 
-BUNDLE_IMG_BASE ?= ghcr.io/networking-incubator/coraza-kubernetes-operator-bundle
+BUNDLE_IMG_BASE ?= $(IMAGE_REGISTRY)/coraza-kubernetes-operator-bundle
 BUNDLE_IMG_TAG ?= $(VERSION)
 BUNDLE_IMG ?= $(BUNDLE_IMG_BASE):$(BUNDLE_IMG_TAG)
 
-CATALOG_IMG_BASE ?= ghcr.io/networking-incubator/coraza-kubernetes-operator-catalog
+CATALOG_IMG_BASE ?= $(IMAGE_REGISTRY)/coraza-kubernetes-operator-catalog
 CATALOG_IMG_TAG ?= $(VERSION)
 CATALOG_IMG ?= $(CATALOG_IMG_BASE):$(CATALOG_IMG_TAG)
 OPM_VERSION ?= v1.64.0
