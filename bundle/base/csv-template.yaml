@@ -19,11 +19,71 @@ spec:
         kind: Engine
         name: engines.waf.k8s.coraza.io
         version: v1alpha1
+        specDescriptors:
+          - path: failurePolicy
+            displayName: Failure Policy
+            description: Behavior when the WAF is unavailable or errors occur.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:select:fail'
+              - 'urn:alm:descriptor:com.tectonic.ui:select:allow'
+          - path: ruleSet.name
+            displayName: RuleSet
+            description: Name of the RuleSet resource to load.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:text'
+          - path: driver.istio.wasm.image
+            displayName: WASM Image
+            description: OCI image reference for the Coraza WASM plugin.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:text'
+          - path: driver.istio.wasm.mode
+            displayName: Istio Integration Mode
+            description: Mechanism for integrating the WAF with Istio.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:select:gateway'
+          - path: driver.istio.wasm.workloadSelector
+            displayName: Workload Selector
+            description: Labels for selecting Gateway pods.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:selector:core:v1:Pod'
+          - path: driver.istio.wasm.ruleSetCacheServer
+            displayName: RuleSet Cache Server
+            description: Configuration for the ruleset cache server.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:advanced'
+          - path: driver.istio.wasm.ruleSetCacheServer.pollIntervalSeconds
+            displayName: Poll Interval (seconds)
+            description: How often the WAF checks for configuration updates.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:number'
+        statusDescriptors:
+          - path: conditions
+            displayName: Conditions
+            description: Current state of the Engine.
+            x-descriptors:
+              - 'urn:alm:descriptor:io.kubernetes.conditions'
       - description: RuleSet defines an ordered set of WAF rules sourced from ConfigMaps.
         displayName: RuleSet
         kind: RuleSet
         name: rulesets.waf.k8s.coraza.io
         version: v1alpha1
+        specDescriptors:
+          - path: rules.name
+            displayName: Rule ConfigMap
+            description: Name of a ConfigMap containing WAF rules.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:text'
+          - path: ruleData
+            displayName: Rule Data Secret
+            description: Name of a Secret containing data files used by rules.
+            x-descriptors:
+              - 'urn:alm:descriptor:com.tectonic.ui:text'
+        statusDescriptors:
+          - path: conditions
+            displayName: Conditions
+            description: Current state of the RuleSet.
+            x-descriptors:
+              - 'urn:alm:descriptor:io.kubernetes.conditions'
   description: |
     The Coraza Kubernetes Operator provides Web Application Firewall (WAF)
     support for Kubernetes Gateways. It manages Coraza WAF
