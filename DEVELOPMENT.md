@@ -499,7 +499,7 @@ make helm.sync
 |----------|-------------|---------|
 | `VERSION` | Version tag for builds | `dev` |
 | `IMAGE_REGISTRY` | Registry and org prefix for all images | `ghcr.io/networking-incubator` |
-| `CONTROLLER_MANAGER_CONTAINER_IMAGE` | Full operator image reference | `$(IMAGE_REGISTRY)/coraza-kubernetes-operator:dev` |
+| `CONTROLLER_MANAGER_CONTAINER_IMAGE` | Full operator image reference | `$(IMAGE_REGISTRY)/coraza-kubernetes-operator:v0.0.0-dev` |
 | `KIND_CLUSTER_NAME` | KIND cluster name for tests | `coraza-kubernetes-operator-integration` |
 | `ISTIO_VERSION` | Istio version for deployment | `1.28.2` |
 | `METALLB_VERSION` | MetalLB version for KIND | `0.15.3` |
