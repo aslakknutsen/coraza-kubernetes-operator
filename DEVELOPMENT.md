@@ -206,29 +206,34 @@ Generate Kubernetes ConfigMaps from CoreRuleSet rules for testing:
 make coraza.generaterules
 ```
 
-This uses `hack/generate_coreruleset_configmaps.py` to:
+This runs `kubectl-coraza` (`go run ./cmd/kubectl-coraza generate coreruleset` via the Makefile) to:
 1. Download CoreRuleSet (if not already present)
-2. Process each `.conf` file in the rules directory
+2. Process each `.conf` file in the rules directory (non-recursive, same as before)
 3. Generate ConfigMaps for each rule file
 4. Generate a Secret for `.data` files
 5. Create a RuleSet resource referencing all ConfigMaps
 6. Output everything to `tmp/rules/rules.yaml`
 
+Conformance CI runs `make coreruleset.verify-parity`, which regenerates that manifest with `--include-test-rule` and checks `sha256sum` against `hack/coreruleset_parity.sha256`. After bumping `CORERULESET_VERSION` or changing generator output for that path, refresh the checksum with `make coreruleset.verify-parity` (it will fail until you run `sha256sum tmp/rules/rules.yaml` and replace the hash line in `hack/coreruleset_parity.sha256`).
+
+Install the plugin for ad hoc use: build `bin/kubectl-coraza` (`make build`) and ensure it is on your `PATH` as `kubectl-coraza` so `kubectl coraza …` resolves it ([plugin discovery](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/)).
+
 **Environment Variables:**
 
-- `CORERULESET_EXTRA_FLAGS` - Additional flags for the generation script
+- `CORERULESET_EXTRA_FLAGS` - Additional flags passed through to the generator
 
-**Generation Script Flags:**
+**Generator flags** (also available as `kubectl coraza generate coreruleset …`):
 
-The script automatically passes the CoreRuleSet version (from `CORERULESET_VERSION`) and supports
-additional flags (passed via `CORERULESET_EXTRA_FLAGS`):
+- `--rules-dir` - Rules directory (required)
+- `--version` - CoreRuleSet version (required); accepts `4.24.1` and `v4.24.1`
+- `--ignore-rules` - Comma-separated rule IDs to exclude (e.g. `949110,949111,980130`)
+- `--ignore-pmFromFile` - Strip rules containing `@pmFromFile` (not supported by Coraza WASM paths)
+- `--include-test-rule` - Append the X-CRS-Test block to the bundled `base-rules` ConfigMap
+- `--ruleset-name`, `--namespace` / `-n`, `--data-secret-name`, `--name-prefix`, `--name-suffix`
+- `--dry-run=client` - Same stdout output; stderr notes dry-run (no cluster writes are performed in either case)
+- `--skip-size-check` - Override the plugin’s approximate per-ConfigMap size guard (avoid unless necessary)
 
-- `--version` - CoreRuleSet version (required) - accepts both `4.24.1` and `v4.24.1` formats
-- `--ignore-rules` - Comma-separated list of rule IDs to exclude (e.g., `"949110,949111,980130"`)
-- `--ignore-pmFromFile` - Ignore rules containing `@pmFromFile` directives (not supported by Coraza)
-- `--include-test-rule` - Include the X-CRS-Test rule in the base rules ConfigMap
-
-The version is automatically normalized (leading 'v' is stripped) and validated before use.
+The version is normalized (leading `v` stripped) and validated before use.
 
 **Examples:**
 
@@ -244,6 +249,9 @@ make CORERULESET_EXTRA_FLAGS="--include-test-rule" coraza.generaterules
 
 # Combine multiple flags
 make CORERULESET_EXTRA_FLAGS="--include-test-rule --ignore-pmFromFile" coraza.generaterules
+
+# Direct invocation (stdout only)
+go run ./cmd/kubectl-coraza generate coreruleset --rules-dir /path/to/coreruleset/rules --version 4.24.1
 ```
 
 ## Deploying CoreRuleSet for Testing
