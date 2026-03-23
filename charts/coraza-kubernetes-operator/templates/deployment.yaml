@@ -55,6 +55,7 @@ spec:
             - --istio-revision={{ .Values.istio.revision }}
             {{- end }}
             - --operator-name={{ include "coraza-operator.fullname" . }}
+            - --default-wasm-image={{ .Values.defaultWasmImage }}
           env:
             - name: POD_NAMESPACE
               valueFrom:

@@ -68,11 +68,10 @@ spec:
                           a WebAssembly plugin.
                         properties:
                           image:
-                            description: image is the OCI image reference for the
-                              Coraza WASM plugin.
-                            maxLength: 1024
-                            minLength: 1
-                            pattern: ^oci://
+                            description: |-
+                              image is the OCI image reference for the Coraza WASM plugin.
+                              If omitted or empty, the operator uses its configured default WASM OCI reference
+                              (--default-wasm-image / CORAZA_DEFAULT_WASM_IMAGE).
                             type: string
                           mode:
                             default: gateway
@@ -156,13 +155,16 @@ spec:
                                 type: object
                             type: object
                             x-kubernetes-map-type: atomic
-                        required:
-                        - image
                         type: object
                         x-kubernetes-validations:
                         - message: workloadSelector is required when mode is gateway
                           rule: 'self.mode == ''gateway'' ? has(self.workloadSelector)
                             : true'
+                        - message: image must start with oci:// when set
+                          rule: '!has(self.image) || size(self.image) == 0 || self.image.matches(''^oci://'')'
+                        - message: image must be at most 1024 characters when set
+                          rule: '!has(self.image) || size(self.image) == 0 || size(self.image)
+                            <= 1024'
                     type: object
                     x-kubernetes-validations:
                     - message: exactly one integration mechanism (Wasm, etc) must

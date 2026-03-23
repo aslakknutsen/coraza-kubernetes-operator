@@ -27,6 +27,10 @@ istio:
   # When empty, the operator does not set an Istio revision label on managed resources.
   revision: ""
 
+# Default WASM plugin OCI URL when an Engine omits spec.driver.istio.wasm.image.
+# Keep in sync with internal/defaults.DefaultCorazaWasmOCIReference.
+defaultWasmImage: "oci://ghcr.io/networking-incubator/coraza-proxy-wasm:1902646ac7391b65be092cdec9b47d29fa5724c7"
+
 openshift:
   enabled: false
 

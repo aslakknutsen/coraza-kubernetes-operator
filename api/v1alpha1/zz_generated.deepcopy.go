@@ -225,6 +225,11 @@ func (in *IstioWasmConfig) DeepCopyInto(out *IstioWasmConfig) {
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Image != nil {
+		in, out := &in.Image, &out.Image
+		*out = new(string)
+		**out = **in
+	}
 	if in.RuleSetCacheServer != nil {
 		in, out := &in.RuleSetCacheServer, &out.RuleSetCacheServer
 		*out = new(RuleSetCacheServerConfig)
