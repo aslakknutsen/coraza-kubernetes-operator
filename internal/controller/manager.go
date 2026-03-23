@@ -46,7 +46,7 @@ const DefaultRuleSetCacheServerPort = 18080
 // -----------------------------------------------------------------------------
 
 // SetupControllers initializes all controllers
-func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyClusterName, istioRevision string) error {
+func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyClusterName, istioRevision, defaultWasmImage string) error {
 	if err := (&RuleSetReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -62,6 +62,7 @@ func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyC
 		Recorder:                  mgr.GetEventRecorder("engine-controller"),
 		ruleSetCacheServerCluster: envoyClusterName,
 		istioRevision:             istioRevision,
+		defaultWasmImage:          defaultWasmImage,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller Engine: %w", err)
 	}

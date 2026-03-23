@@ -40,6 +40,7 @@ import (
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/controller"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
 	// +kubebuilder:scaffold:imports
 )
@@ -89,7 +90,7 @@ func main() {
 	rulesetCache := setupCacheServer(mgr, cfg)
 	setupIstioPrerequisites(mgr, cfg, os.Getenv("POD_NAMESPACE"))
 
-	if err := controller.SetupControllers(mgr, rulesetCache, cfg.envoyClusterName, cfg.istioRevision); err != nil {
+	if err := controller.SetupControllers(mgr, rulesetCache, cfg.envoyClusterName, cfg.istioRevision, cfg.defaultWasmImage); err != nil {
 		setupLog.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -127,11 +128,17 @@ type config struct {
 	cacheServerPort   int
 	envoyClusterName  string
 	istioRevision     string
+	defaultWasmImage  string
 	operatorName      string
 }
 
 func parseFlags() config {
 	var cfg config
+
+	defaultWasmImageFlagDefault := defaults.DefaultCorazaWasmOCIReference
+	if v := os.Getenv("CORAZA_DEFAULT_WASM_IMAGE"); v != "" {
+		defaultWasmImageFlagDefault = v
+	}
 
 	flag.StringVar(&cfg.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -152,6 +159,8 @@ func parseFlags() config {
 	flag.IntVar(&cfg.cacheServerPort, "cache-server-port", controller.DefaultRuleSetCacheServerPort, fmt.Sprintf("Port number for the RuleSet cache server to listen on (default %d)", controller.DefaultRuleSetCacheServerPort))
 	flag.StringVar(&cfg.envoyClusterName, "envoy-cluster-name", "", "The Envoy cluster name pointing to the RuleSet cache server (required)")
 	flag.StringVar(&cfg.istioRevision, "istio-revision", "", "The Istio revision label value for managed Istio resources")
+	flag.StringVar(&cfg.defaultWasmImage, "default-wasm-image", defaultWasmImageFlagDefault,
+		"Default OCI reference for the Coraza WASM plugin when an Engine omits spec.driver.istio.wasm.image")
 	flag.StringVar(&cfg.operatorName, "operator-name", "", "The operator release name used to derive managed resource names (when unset, Istio prerequisites are skipped)")
 
 	opts := zap.Options{Development: true}

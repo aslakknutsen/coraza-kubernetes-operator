@@ -45,6 +45,8 @@ type IstioDriverConfig struct {
 // plugin with Istio.
 //
 // +kubebuilder:validation:XValidation:rule="self.mode == 'gateway' ? has(self.workloadSelector) : true",message="workloadSelector is required when mode is gateway"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) == 0 || self.image.matches('^oci://')",message="image must start with oci:// when set"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) == 0 || size(self.image) <= 1024",message="image must be at most 1024 characters when set"
 type IstioWasmConfig struct {
 	// mode specifies what mechanism will be used to integrate the WAF with
 	// Istio.
@@ -64,12 +66,11 @@ type IstioWasmConfig struct {
 	WorkloadSelector *metav1.LabelSelector `json:"workloadSelector,omitempty,omitzero"`
 
 	// image is the OCI image reference for the Coraza WASM plugin.
+	// If omitted or empty, the operator uses its configured default WASM OCI reference
+	// (--default-wasm-image / CORAZA_DEFAULT_WASM_IMAGE).
 	//
-	// +required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=1024
-	// +kubebuilder:validation:Pattern=`^oci://`
-	Image string `json:"image,omitempty"`
+	// +optional
+	Image *string `json:"image,omitempty"`
 
 	// ruleSetCacheServer contains configuration for the ruleset cache server.
 	//
