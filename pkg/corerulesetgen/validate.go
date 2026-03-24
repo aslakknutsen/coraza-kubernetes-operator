@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // Approximate max size for a single ConfigMap "rules" entry or one Secret stringData value
@@ -74,6 +76,15 @@ func checkSecretStringDataSize(secretName string, entries map[string]string, opt
 	return nil
 }
 
+// validateConfigMapObjectName ensures the final metadata.name is acceptable to the
+// apiserver (RFC 1123 DNS subdomain, max 253 runes), including after NamePrefix/NameSuffix.
+func validateConfigMapObjectName(name string) error {
+	if errs := validation.IsDNS1123Subdomain(name); len(errs) > 0 {
+		return fmt.Errorf("invalid ConfigMap name %q: %s", name, strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 func generateConfigMapName(fileBase string) (string, error) {
 	name := strings.ToLower(strings.TrimSuffix(fileBase, ".conf"))
 	name = strings.ReplaceAll(name, "_", "-")
@@ -82,9 +93,6 @@ func generateConfigMapName(fileBase string) (string, error) {
 	name = strings.TrimRight(name, "-.")
 	if name == "" {
 		return "", fmt.Errorf("cannot generate valid ConfigMap name from file: %s", fileBase)
-	}
-	if len(name) > 253 {
-		return "", fmt.Errorf("generated ConfigMap name exceeds 253 characters: %s", name)
 	}
 	return name, nil
 }

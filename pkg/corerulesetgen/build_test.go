@@ -157,6 +157,42 @@ SecRule ARGS "@rx b" "id:200,phase:2,pass,nolog"
 	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:200,")
 }
 
+func TestBuild_rejectsInvalidPrefixedConfigMapName(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "x.conf")
+	require.NoError(t, os.WriteFile(path, []byte(`SecRule ARGS "@rx a" "id:1,pass"`+"\n"), 0o644))
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+	ver := mustParseCRSVersion(t, "4.0.0")
+	_, err = Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.0.0",
+		RuleSetName:    "rs",
+		DataSecretName: "ds",
+		NamePrefix:     "bad_",
+	}, scan, ver)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid ConfigMap name")
+}
+
+func TestBuild_rejectsConfigMapNameTooLongAfterPrefix(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "a.conf")
+	require.NoError(t, os.WriteFile(path, []byte(`SecRule ARGS "@rx a" "id:1,pass"`+"\n"), 0o644))
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+	ver := mustParseCRSVersion(t, "4.0.0")
+	_, err = Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.0.0",
+		RuleSetName:    "rs",
+		DataSecretName: "ds",
+		NamePrefix:     strings.Repeat("a", 253),
+	}, scan, ver)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid ConfigMap name")
+}
+
 func mustParseCRSVersion(t *testing.T, v string) CRSVersion {
 	t.Helper()
 	ver, err := ParseCRSVersion(v)

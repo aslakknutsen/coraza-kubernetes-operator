@@ -212,6 +212,9 @@ func buildConfigMapYAML(path string, opts Options) (name, yamlOut, skipReason st
 	if name == "" {
 		return "", "", "invalid empty ConfigMap name", nil, fmt.Errorf("empty ConfigMap name after prefix/suffix")
 	}
+	if err := validateConfigMapObjectName(name); err != nil {
+		return "", "", err.Error(), nil, err
+	}
 
 	processed, w, err := processFileContent(path, opts.IgnoreRuleIDs, opts.IgnorePMFromFile)
 	if err != nil {
