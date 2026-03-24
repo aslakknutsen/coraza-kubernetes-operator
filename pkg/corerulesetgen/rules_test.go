@@ -9,6 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSplitIntoRules_multilineTrailingSpaceAfterBackslash(t *testing.T) {
+	// Backslash continuation with trailing spaces before newline (common in CRS).
+	line1 := `SecRule ARGS "@rx x" "id:1,pass" \   `
+	content := line1 + "\n" + `"cont" "id:2,pass"`
+	blocks := splitIntoRules(content)
+	require.Len(t, blocks, 1)
+	require.Contains(t, blocks[0], "id:1")
+	require.Contains(t, blocks[0], "cont")
+}
+
 func TestChainSecRuleGroups(t *testing.T) {
 	t.Run("standalone", func(t *testing.T) {
 		blocks := splitIntoRules(`SecRule A "op" "id:1,pass"

@@ -15,6 +15,13 @@ var (
 	chainActionRe = regexp.MustCompile(`,\s*chain\s*(?:,|")`)
 )
 
+// trimLineEnd trims trailing CR/LF, spaces, and tabs. Continuation lines
+// often end with '\' followed by spaces before the newline; those spaces
+// must be ignored when detecting a backslash continuation.
+func trimLineEnd(line string) string {
+	return strings.TrimRight(line, " \t\r\n")
+}
+
 func splitIntoRules(content string) []string {
 	lines := strings.Split(content, "\n")
 	blocks := make([]string, 0, len(lines))
@@ -22,7 +29,7 @@ func splitIntoRules(content string) []string {
 	inMultiline := false
 
 	for _, line := range lines {
-		stripped := strings.TrimRight(line, "\r\n")
+		stripped := trimLineEnd(line)
 		if inMultiline {
 			current = append(current, line)
 			if !strings.HasSuffix(stripped, "\\") {
