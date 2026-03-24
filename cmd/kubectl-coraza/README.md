@@ -9,7 +9,7 @@ It provides client-side helpers for the Coraza Kubernetes operator. Today the ma
 Build or copy the binary so the name is exactly `kubectl-coraza` and it is on `PATH`. Then:
 
 ```bash
-kubectl coraza version
+kubectl coraza --version
 ```
 
 ## Generate CoreRuleSet manifests
