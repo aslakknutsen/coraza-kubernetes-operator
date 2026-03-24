@@ -168,7 +168,9 @@ func TestBuild_confResultWarnsWhenIgnoringPMFromFile(t *testing.T) {
 	tmp := t.TempDir()
 	const name = "pm.conf"
 	path := filepath.Join(tmp, name)
-	err := os.WriteFile(path, []byte(`SecRule ARGS "@rx x" "id:1,phase:2,pass,nolog,chain"\nSecRule ARGS "@pmFromFile foo.data" "id:2,phase:2,pass,nolog"`+"\n"), 0o644)
+	err := os.WriteFile(path, []byte(`SecRule ARGS "@rx x" "id:1,phase:2,pass,nolog,chain"
+SecRule ARGS "@pmFromFile foo.data" "id:2,phase:2,pass,nolog"
+`+"\n"), 0o644)
 	require.NoError(t, err)
 
 	ver := mustParseCRSVersion(t, "4.0.0")
@@ -186,10 +188,10 @@ func TestBuild_confResultWarnsWhenIgnoringPMFromFile(t *testing.T) {
 
 	var found bool
 	for _, w := range bundle.ConfFileResults[0].Warns {
-		if strings.Contains(w, "@pmFromFile not supported") {
+		if strings.Contains(w, "SecRule chain") && strings.Contains(w, "@pmFromFile") {
 			found = true
 			break
 		}
 	}
-	require.True(t, found, "expected warn about @pmFromFile when IgnorePMFromFile is true")
+	require.True(t, found, "expected chain warn when IgnorePMFromFile drops a chained @pmFromFile rule")
 }
