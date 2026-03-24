@@ -129,6 +129,23 @@ func TestBuild_withDataFiles_emitsSecretAndRuleData(t *testing.T) {
 	require.Contains(t, bundle.RuleSetDoc, "ruleData: coreruleset-data")
 }
 
+func TestBuild_rejectsInvalidSecretDataKeyFromFilename(t *testing.T) {
+	tmp := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "bad name.data"), []byte("x\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "ok.conf"), []byte(`SecRule ARGS "@rx a" "id:1,pass"`+"\n"), 0o644))
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+	ver := mustParseCRSVersion(t, "4.0.0")
+	_, err = Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.0.0",
+		RuleSetName:    "rs",
+		DataSecretName: "coreruleset-data",
+	}, scan, ver)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid Secret stringData key")
+}
+
 func TestBuild_ignoreRuleIDs_dropsRuleFromExtraConfigMap(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "two.conf")

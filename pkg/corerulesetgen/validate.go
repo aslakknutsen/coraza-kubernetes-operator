@@ -85,6 +85,15 @@ func validateConfigMapObjectName(name string) error {
 	return nil
 }
 
+// validateSecretStringDataKey ensures a Secret stringData key derived from a filename is
+// valid for the apiserver (same rules as ConfigMap data keys).
+func validateSecretStringDataKey(key string) error {
+	if errs := validation.IsConfigMapKey(key); len(errs) > 0 {
+		return fmt.Errorf("invalid Secret stringData key %q (from data filename): %s", key, strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 func generateConfigMapName(fileBase string) (string, error) {
 	name := strings.ToLower(strings.TrimSuffix(fileBase, ".conf"))
 	name = strings.ReplaceAll(name, "_", "-")

@@ -163,11 +163,15 @@ func indentRulesMultiline(processed string) string {
 func buildDataSecretYAML(dataFiles []string, opts Options) (string, error) {
 	entries := make(map[string]string, len(dataFiles))
 	for _, p := range dataFiles {
+		key := filepath.Base(p)
+		if err := validateSecretStringDataKey(key); err != nil {
+			return "", fmt.Errorf("data file %s: %w", p, err)
+		}
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return "", fmt.Errorf("read data file %s: %w", p, err)
 		}
-		entries[filepath.Base(p)] = strings.ToValidUTF8(string(raw), "")
+		entries[key] = strings.ToValidUTF8(string(raw), "")
 	}
 	if err := checkSecretStringDataSize(opts.DataSecretName, entries, opts); err != nil {
 		return "", err
