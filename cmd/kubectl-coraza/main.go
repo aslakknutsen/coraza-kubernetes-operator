@@ -22,6 +22,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -107,10 +108,11 @@ func runCoreruleset(cmd *cobra.Command, _ []string) error {
 			}
 		}
 		if len(ignoreSet) > 0 {
-			var ids []string
+			ids := make([]string, 0, len(ignoreSet))
 			for id := range ignoreSet {
 				ids = append(ids, id)
 			}
+			sort.Strings(ids)
 			fmt.Fprintf(os.Stderr, "Ignoring rule IDs: %s\n", strings.Join(ids, ", "))
 		}
 	}
