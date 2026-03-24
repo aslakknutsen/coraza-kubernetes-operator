@@ -87,10 +87,10 @@ release.manifests: manifests generate helm.sync ## Build release manifest bundle
 .PHONY: release.kubectl-plugin
 release.kubectl-plugin: ## Cross-build kubectl-coraza binaries into dist/ (linux/darwin, amd64/arm64)
 	@mkdir -p dist
-	GOOS=linux GOARCH=amd64 go build -trimpath -o dist/kubectl-coraza-linux-amd64 ./cmd/kubectl-coraza
-	GOOS=linux GOARCH=arm64 go build -trimpath -o dist/kubectl-coraza-linux-arm64 ./cmd/kubectl-coraza
-	GOOS=darwin GOARCH=amd64 go build -trimpath -o dist/kubectl-coraza-darwin-amd64 ./cmd/kubectl-coraza
-	GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/kubectl-coraza-darwin-arm64 ./cmd/kubectl-coraza
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-linux-amd64 ./cmd/kubectl-coraza
+	GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-linux-arm64 ./cmd/kubectl-coraza
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-amd64 ./cmd/kubectl-coraza
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-arm64 ./cmd/kubectl-coraza
 
 # ------------------------------------------------------------------------------
 # Deployment
