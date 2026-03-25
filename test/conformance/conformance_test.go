@@ -20,12 +20,14 @@ package conformance
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/url"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +36,7 @@ import (
 	"github.com/coreruleset/go-ftw/v2/output"
 	"github.com/coreruleset/go-ftw/v2/runner"
 	"github.com/coreruleset/go-ftw/v2/test"
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 	"github.com/networking-incubator/coraza-kubernetes-operator/test/framework"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -42,6 +45,7 @@ import (
 const (
 	// rulesetName matches the default from kubectl-coraza / pkg/corerulesetgen (default-ruleset).
 	rulesetName = "default-ruleset"
+
 	// gwName defines the gateway name for this test
 	gwName = "gateway-conformance"
 )
@@ -109,8 +113,14 @@ func TestCoreRuleSetConformance(t *testing.T) {
 	// Step 3: Deploy CRS Coreruleset
 	// -------------------------------------------------------------------------
 	s.Step("deploy coreruleset-compatible rules")
-	// We deploy the ruleset manually based on ruleLocation
-	s.ApplyManifest(ns, ruleLocation)
+	// CRS contains rules that the operator flags as unsupported in WASM mode
+	// (see LIMITATIONS.md). Inject the skip annotation into the RuleSet manifest
+	// BEFORE applying so the very first reconciliation sees it. Annotating after
+	// creation races with the controller and may leave the RuleSet Degraded.
+	annotatedManifest := injectRuleSetAnnotation(t, ruleLocation,
+		wafv1alpha1.AnnotationSkipUnsupportedRulesCheck, "true")
+	s.OnCleanup(func() { _ = os.Remove(annotatedManifest) })
+	s.ApplyManifest(ns, annotatedManifest)
 	s.ExpectRuleSetReady(ns, rulesetName)
 
 	// -------------------------------------------------------------------------
@@ -150,10 +160,12 @@ func TestCoreRuleSetConformance(t *testing.T) {
 	// Stream logs to file with immediate writes (no buffering)
 	outputErrors := make([]error, 0)
 	logDone := make(chan struct{})
+	logsReady := make(chan struct{}) // Signal when first logs are written
 	go func() {
 		defer close(logDone)
 		buf := make([]byte, 1024)
 		totalBytes := 0
+		firstWrite := true
 		for {
 			n, err := logStream.Read(buf)
 			if n > 0 {
@@ -165,6 +177,12 @@ func TestCoreRuleSetConformance(t *testing.T) {
 				err = logFile.Sync() // Force immediate write to disk
 				if err != nil {
 					outputErrors = append(outputErrors, err)
+				}
+				// Signal that logs are ready after first successful write+sync
+				if firstWrite {
+					close(logsReady)
+					firstWrite = false
+					t.Logf("log streaming started (wrote %d bytes)", n)
 				}
 			}
 			if err != nil {
@@ -205,6 +223,16 @@ func TestCoreRuleSetConformance(t *testing.T) {
 	cfg.LogFile = logFile.Name()
 	cfg.TestOverride.Overrides.DestAddr = new(gwUrl.Hostname())
 	cfg.TestOverride.Overrides.Port = &port
+
+	// Wait for log streaming to start before running FTW tests
+	// This prevents the "can't find log marker" race condition
+	s.Step("wait for log streaming to start")
+	select {
+	case <-logsReady:
+		t.Log("log streaming confirmed ready")
+	case <-time.After(30 * time.Second):
+		t.Fatal("timeout waiting for log streaming to start - no logs received after 30s")
+	}
 
 	// -------------------------------------------------------------------------
 	// Step 6: Run FTW tests
@@ -275,4 +303,40 @@ func buildOutput(t *testing.T) *output.Output {
 		})
 	}
 	return output.NewOutput(outputFormat, outputFile)
+}
+
+// injectRuleSetAnnotation reads a multi-document YAML manifest file and adds
+// the given annotation to every RuleSet document. Returns the path to a
+// temporary file containing the modified manifest.
+func injectRuleSetAnnotation(t *testing.T, path, key, value string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err, "read manifest %s", path)
+
+	annotation := fmt.Sprintf("    %s: %q", key, value)
+
+	var result []string
+	for _, doc := range strings.Split(string(data), "---") {
+		if strings.Contains(doc, "kind: RuleSet") {
+			// Insert annotation after the "metadata:" line. If an
+			// "annotations:" block already exists, append to it;
+			// otherwise create one.
+			if strings.Contains(doc, "  annotations:") {
+				doc = strings.Replace(doc, "  annotations:", "  annotations:\n"+annotation, 1)
+			} else {
+				doc = strings.Replace(doc, "metadata:", "metadata:\n  annotations:\n"+annotation, 1)
+			}
+		}
+		result = append(result, doc)
+	}
+
+	tmp, err := os.CreateTemp("", "crs-annotated-*.yaml")
+	require.NoError(t, err)
+
+	_, err = tmp.WriteString(strings.Join(result, "---"))
+	require.NoError(t, err)
+	require.NoError(t, tmp.Close())
+
+	return tmp.Name()
 }
