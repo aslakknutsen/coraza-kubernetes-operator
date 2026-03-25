@@ -173,14 +173,6 @@ jobs:
           go-version-file: "go.mod"
           cache: false
 
-      - name: set up python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-        with:
-          python-version: "3.x"
-      
-      - name: setup python dependencies
-        run: pip install PyYAML
-
       - name: install kubectl
         uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
         with:

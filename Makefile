@@ -44,7 +44,8 @@ all: build
 
 .PHONY: build
 build: manifests generate fmt vet lint
-	go build -o bin/manager -tags no_fs_access cmd/main.go
+	go build -o bin/manager -tags no_fs_access ./cmd/manager
+	go build -o bin/kubectl-coraza ./cmd/kubectl-coraza
 
 .PHONY: build.image
 build.image:
@@ -83,6 +84,14 @@ release.manifests: manifests generate helm.sync ## Build release manifest bundle
 	@echo "Manifest bundles built successfully in dist/"
 	@ls -lh dist/
 
+.PHONY: release.kubectl-plugin
+release.kubectl-plugin: ## Cross-build kubectl-coraza binaries into dist/ (linux/darwin, amd64/arm64)
+	@mkdir -p dist
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-linux-amd64 ./cmd/kubectl-coraza
+	GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-linux-arm64 ./cmd/kubectl-coraza
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-amd64 ./cmd/kubectl-coraza
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-arm64 ./cmd/kubectl-coraza
+
 # ------------------------------------------------------------------------------
 # Deployment
 # ------------------------------------------------------------------------------
@@ -110,7 +119,7 @@ undeploy: ## Remove operator from the cluster using Helm
 
 .PHONY: run
 run: manifests generate fmt vet
-	go run ./cmd/main.go
+	go run ./cmd/manager
 
 # ------------------------------------------------------------------------------
 # Development
@@ -227,7 +236,7 @@ coraza.coreruleset.download:
 
 .PHONY: coraza.generaterules
 coraza.generaterules: coraza.coreruleset.download $(LOCALRULES)
-	@python3 hack/generate_coreruleset_configmaps.py --rules-dir $(CORERULESET_DIR)/rules/ --version $(CORERULESET_VERSION:v%=%) $(CORERULESET_EXTRA_FLAGS) > $(LOCALRULES)/rules.yaml
+	@go run ./cmd/kubectl-coraza generate coreruleset --rules-dir $(CORERULESET_DIR)/rules/ --version $(CORERULESET_VERSION:v%=%) $(CORERULESET_EXTRA_FLAGS) > $(LOCALRULES)/rules.yaml
 
 .PHONY: coraza.coreruleset
 coraza.coreruleset: coraza.generaterules
@@ -239,9 +248,14 @@ coraza.coreruleset: coraza.generaterules
 # -------------------------------------------------------------------------------
 CONFORMANCE_EXTRA_FLAGS ?= 
 
+# Verifies generator output for pinned CRS (CORERULESET_VERSION + --include-test-rule) against hack/coreruleset_parity.sha256.
+.PHONY: coreruleset.verify-parity
+coreruleset.verify-parity:
+	@$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule" coraza.generaterules
+	sha256sum -c hack/coreruleset_parity.sha256
+
 .PHONY: test.conformance
-test.conformance:
-	$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule" coraza.generaterules
+test.conformance: coreruleset.verify-parity
 	cd test/conformance &&  $(CONFORMANCE_EXTRA_FLAGS) FTW_CONFIG=$(shell pwd)/test/conformance/ftw.yml TESTMANIFESTS_PATH=$(CORERULESET_DIR)/tests/tests RULESET_PATH=$(LOCALRULES)/rules.yaml KIND_CLUSTER_NAME=${KIND_CLUSTER_NAME} ISTIO_VERSION=${ISTIO_VERSION} go test -tags=conformance ./... -v
 
 # -------------------------------------------------------------------------------

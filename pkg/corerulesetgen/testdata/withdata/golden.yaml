@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: base-rules
+data:
+  rules: |
+    SecRuleEngine On
+    SecRequestBodyAccess On
+    SecRequestBodyLimit 13107200
+    SecRequestBodyInMemoryLimit 131072
+    SecRequestBodyLimitAction Reject
+    SecResponseBodyAccess On
+    SecResponseBodyMimeType text/plain text/html text/xml application/json
+    # SecRequestBodyJsonDepthLimit directive requires Coraza 3.4.0 on WASM Plugin and it is not supported yet
+    # SecRequestBodyJsonDepthLimit 1024
+    SecResponseBodyLimit 524288
+    SecResponseBodyLimitAction ProcessPartial
+    SecAuditEngine RelevantOnly
+    SecAuditLogType Serial
+    SecAuditLog /dev/stdout
+    SecAuditLogFormat JSON
+    SecAuditLogParts ABIJDEFHZ
+    SecAuditLogRelevantStatus "^(40[0-3]|40[5-9]|4[1-9][0-9]|5[0-9][0-9])$"
+    SecDefaultAction "phase:1,log,auditlog,pass"
+    SecDefaultAction "phase:2,log,auditlog,pass"
+    SecRule REQUEST_HEADERS:Content-Type "^(?:application(?:/soap\+|/)|text/)xml" \
+     "id:200000,\
+     phase:1,\
+     t:none,t:lowercase,\
+     pass,\
+     nolog,\
+     ctl:requestBodyProcessor=XML"
+    SecRule REQUEST_HEADERS:Content-Type "^application/json" \
+     "id:200001,\
+     phase:1,\
+     t:none,t:lowercase,\
+     pass,\
+     nolog,\
+     ctl:requestBodyProcessor=JSON"
+    SecRule REQUEST_HEADERS:Content-Type "^application/[a-z0-9.-]+\+json" \
+     "id:200006,\
+     phase:1,\
+     t:none,t:lowercase,\
+     pass,\
+     nolog,\
+     ctl:requestBodyProcessor=JSON"
+    SecRule REQBODY_ERROR "!@eq 0" \
+     "id:200002,\
+     phase:2,\
+     t:none,\
+     log,\
+     deny,\
+     status:400,\
+     msg:'Failed to parse request body.',\
+     logdata:'%{reqbody_error_msg}',\
+     severity:2"
+    SecRule MULTIPART_STRICT_ERROR "!@eq 0" \
+     "id:200003,\
+     phase:2,\
+     t:none,\
+     log,\
+     deny,\
+     status:400,\
+     msg:'Multipart request body failed strict validation.'"
+    SecAction \
+     "id:900120,\
+     phase:1,\
+     pass,\
+     t:none,\
+     nolog,\
+     tag:'OWASP_CRS',\
+     ver:'OWASP_CRS/4.0.0',\
+     setvar:tx.early_blocking=1"
+    SecAction \
+     "id:900990,\
+     phase:1,\
+     pass,\
+     t:none,\
+     nolog,\
+     tag:'OWASP_CRS',\
+     ver:'OWASP_CRS/4.0.0',\
+     setvar:tx.crs_setup_version=400"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rules
+data:
+  rules: |
+    SecRule ARGS "@rx x" "id:200,phase:2,pass,nolog"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coreruleset-data
+type: coraza/data
+stringData:
+  foo.data: |
+    hello
+    
+---
+apiVersion: waf.k8s.coraza.io/v1alpha1
+kind: RuleSet
+metadata:
+  name: default-ruleset
+spec:
+  rules:
+    - name: base-rules
+    - name: rules
+  ruleData: coreruleset-data
+
