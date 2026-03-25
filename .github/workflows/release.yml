@@ -55,7 +55,7 @@ jobs:
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
 
       - name: build manifest bundles
-        run: make release.manifests
+        run: make release.manifests release.kubectl-plugin
         env:
           VERSION: ${{ github.ref_name }}
 
@@ -228,6 +228,10 @@ jobs:
             dist/operator.yaml
             dist/samples.yaml
             dist/*.tgz
+            dist/kubectl-coraza-linux-amd64
+            dist/kubectl-coraza-linux-arm64
+            dist/kubectl-coraza-darwin-amd64
+            dist/kubectl-coraza-darwin-arm64
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -87,7 +87,7 @@ func TestComputePRAreaLabels(t *testing.T) {
 		{
 			name:   "no matching files",
 			labels: []string{},
-			files:  []string{"cmd/main.go"},
+			files:  []string{"cmd/manager/main.go"},
 			want:   nil,
 		},
 		{
