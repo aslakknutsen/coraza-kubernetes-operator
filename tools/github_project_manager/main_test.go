@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func TestParseConfig(t *testing.T) {
 				owner:   "env-org",
 				repo:    "env-repo",
 				issue:   7,
-				project: 1,
+				project: 0,
 				command: "close-declined",
 				token:   "tok",
 			},
@@ -86,7 +87,7 @@ func TestParseConfig(t *testing.T) {
 				owner:   "flag-org",
 				repo:    "flag-repo",
 				issue:   10,
-				project: 1,
+				project: 0,
 				command: "triage-pr",
 				token:   "tok",
 			},
@@ -309,6 +310,126 @@ func TestRunTriagePR(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, 3, getCalls)
+	})
+
+	t.Run("auto-discovers project when project is 0", func(t *testing.T) {
+		var graphQLCalls []string
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/pulls/1"):
+				writeJSON(w, pullRequestInfo{NodeID: "node1", Additions: 5, Deletions: 3})
+			case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/pulls/1/files"):
+				writeJSON(w, []map[string]string{{"filename": "api/v1alpha1/types.go"}})
+			case r.Method == "GET" && strings.Contains(r.URL.Path, "/milestones"):
+				writeJSON(w, []Milestone{{Number: 1, Title: "v0.1.0"}})
+			case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/labels"):
+				writeJSON(w, []map[string]string{})
+			case r.Method == "PATCH":
+				writeJSON(w, map[string]string{})
+			case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/graphql"):
+				body, _ := io.ReadAll(r.Body)
+				var req struct{ Query string }
+				json.Unmarshal(body, &req)
+				graphQLCalls = append(graphQLCalls, req.Query)
+
+				if strings.Contains(req.Query, "projectsV2") {
+					writeJSON(w, map[string]any{
+						"data": map[string]any{
+							"organization": map[string]any{
+								"projectsV2": map[string]any{
+									"nodes": []map[string]any{
+										{"id": "PVT_1", "number": 1, "closed": false},
+									},
+								},
+							},
+						},
+					})
+				} else if strings.Contains(req.Query, "addProjectV2ItemById") {
+					writeJSON(w, map[string]any{
+						"data": map[string]any{
+							"addProjectV2ItemById": map[string]any{
+								"item": map[string]any{"id": "PVTI_1"},
+							},
+						},
+					})
+				} else if strings.Contains(req.Query, "node") {
+					writeJSON(w, map[string]any{
+						"data": map[string]any{
+							"node": map[string]any{
+								"field": map[string]any{
+									"id": "FIELD_1",
+									"options": []map[string]any{
+										{"id": "OPT_1", "name": "Review"},
+									},
+								},
+							},
+						},
+					})
+				} else if strings.Contains(req.Query, "updateProjectV2ItemFieldValue") {
+					writeJSON(w, map[string]any{
+						"data": map[string]any{
+							"updateProjectV2ItemFieldValue": map[string]any{
+								"projectV2Item": map[string]any{"id": "PVTI_1"},
+							},
+						},
+					})
+				}
+			default:
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}
+
+		client := newTestClient(t, handler)
+		iss := &Issue{Number: 1, State: "open", Labels: []string{}}
+
+		err := runTriagePR(client, 1, iss, 0, false, noopLogger)
+
+		require.NoError(t, err)
+		require.NotEmpty(t, graphQLCalls)
+		assert.True(t, strings.Contains(graphQLCalls[0], "projectsV2"), "first GraphQL call should be project discovery")
+	})
+
+	t.Run("project board failure emits warning to stderr", func(t *testing.T) {
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/pulls/1"):
+				writeJSON(w, pullRequestInfo{NodeID: "node1", Additions: 5, Deletions: 3})
+			case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/pulls/1/files"):
+				writeJSON(w, []map[string]string{{"filename": "api/v1alpha1/types.go"}})
+			case r.Method == "GET" && strings.Contains(r.URL.Path, "/milestones"):
+				writeJSON(w, []Milestone{{Number: 1, Title: "v0.1.0"}})
+			case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/labels"):
+				writeJSON(w, []map[string]string{})
+			case r.Method == "PATCH":
+				writeJSON(w, map[string]string{})
+			case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/graphql"):
+				// Fail all GraphQL calls to simulate project board failure
+				w.WriteHeader(http.StatusBadGateway)
+				w.Write([]byte("bad gateway"))
+			default:
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}
+
+		client := newTestClient(t, handler)
+		iss := &Issue{Number: 1, State: "open", Labels: []string{}}
+
+		// Capture stderr
+		oldStderr := os.Stderr
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stderr = w
+
+		triageErr := runTriagePR(client, 1, iss, 1, false, noopLogger)
+
+		w.Close()
+		os.Stderr = oldStderr
+		var buf strings.Builder
+		_, copyErr := io.Copy(&buf, r)
+		require.NoError(t, copyErr)
+
+		require.NoError(t, triageErr, "project board failure should not be a fatal error")
+		assert.Contains(t, buf.String(), "::warning::")
 	})
 }
 

@@ -32,7 +32,7 @@ jobs:
 
             - name: Triage PR
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.PROJECT_MANAGEMENT_PAT }}
                   GITHUB_EVENT_REPOSITORY_NAME: ${{ github.event.repository.name }}
               run: |
                   ./github_project_manager -v \

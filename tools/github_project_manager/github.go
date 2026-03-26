@@ -353,6 +353,82 @@ func (c *GitHubClient) doGraphQL(query string, variables map[string]any) (json.R
 	return resp.Data, nil
 }
 
+// findOldestOpenProject discovers the oldest (lowest-numbered) non-closed
+// ProjectV2 board owned by the repository owner. Tries org first, falls
+// back to user.
+func (c *GitHubClient) findOldestOpenProject() (string, error) {
+	type projectNode struct {
+		ID     string `json:"id"`
+		Number int    `json:"number"`
+		Closed bool   `json:"closed"`
+	}
+
+	pickOldestOpen := func(nodes []projectNode) (string, bool) {
+		var best *projectNode
+		for i := range nodes {
+			n := &nodes[i]
+			if n.Closed {
+				continue
+			}
+			if best == nil || n.Number < best.Number {
+				best = n
+			}
+		}
+		if best == nil {
+			return "", false
+		}
+		return best.ID, true
+	}
+
+	// Try org-owned projects first
+	data, err := c.doGraphQL(`query($owner: String!) {
+		organization(login: $owner) {
+			projectsV2(first: 100) { nodes { id number closed } }
+		}
+	}`, map[string]any{"owner": c.owner})
+	if err == nil {
+		var resp struct {
+			Organization struct {
+				ProjectsV2 struct {
+					Nodes []projectNode `json:"nodes"`
+				} `json:"projectsV2"`
+			} `json:"organization"`
+		}
+		if err := json.Unmarshal(data, &resp); err == nil {
+			if id, ok := pickOldestOpen(resp.Organization.ProjectsV2.Nodes); ok {
+				return id, nil
+			}
+		}
+	}
+
+	// Fallback to user-owned projects
+	data, err = c.doGraphQL(`query($owner: String!) {
+		user(login: $owner) {
+			projectsV2(first: 100) { nodes { id number closed } }
+		}
+	}`, map[string]any{"owner": c.owner})
+	if err != nil {
+		return "", fmt.Errorf("listing projects for %s: %w", c.owner, err)
+	}
+
+	var resp struct {
+		User struct {
+			ProjectsV2 struct {
+				Nodes []projectNode `json:"nodes"`
+			} `json:"projectsV2"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return "", fmt.Errorf("decoding user projects: %w", err)
+	}
+
+	if id, ok := pickOldestOpen(resp.User.ProjectsV2.Nodes); ok {
+		return id, nil
+	}
+
+	return "", fmt.Errorf("no open projects found for %s", c.owner)
+}
+
 func (c *GitHubClient) lookupProjectID(projectNumber int) (string, error) {
 	// Try org-owned project first
 	data, err := c.doGraphQL(`query($owner: String!, $number: Int!) {
@@ -366,7 +442,7 @@ func (c *GitHubClient) lookupProjectID(projectNumber int) (string, error) {
 				} `json:"projectV2"`
 			} `json:"organization"`
 		}
-		if err := json.Unmarshal(data, &resp); err == nil {
+		if err := json.Unmarshal(data, &resp); err == nil && resp.Organization.ProjectV2.ID != "" {
 			return resp.Organization.ProjectV2.ID, nil
 		}
 	}
@@ -388,6 +464,9 @@ func (c *GitHubClient) lookupProjectID(projectNumber int) (string, error) {
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return "", fmt.Errorf("decoding user project: %w", err)
+	}
+	if resp.User.ProjectV2.ID == "" {
+		return "", fmt.Errorf("project #%d not found", projectNumber)
 	}
 	return resp.User.ProjectV2.ID, nil
 }

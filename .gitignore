@@ -30,6 +30,7 @@ dist/*
 *.swp
 *.swo
 *~
+*.claude/worktrees/*
 
 # local notes
 *.txt

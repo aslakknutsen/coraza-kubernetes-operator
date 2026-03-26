@@ -343,6 +343,124 @@ func TestAddToProjectBoard(t *testing.T) {
 	})
 }
 
+func TestFindOldestOpenProject(t *testing.T) {
+	t.Run("picks lowest numbered open project from org", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				data: `{"organization":{"projectsV2":{"nodes":[
+					{"id":"PVT_3","number":3,"closed":false},
+					{"id":"PVT_1","number":1,"closed":false},
+					{"id":"PVT_2","number":2,"closed":true}
+				]}}}`,
+			},
+		}, &callCount))
+
+		id, err := client.findOldestOpenProject()
+
+		require.NoError(t, err)
+		assert.Equal(t, "PVT_1", id)
+		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("falls back to user when org query fails", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				err: "not an organization",
+			},
+			"user": graphQLData{
+				data: `{"user":{"projectsV2":{"nodes":[
+					{"id":"PVT_5","number":5,"closed":false},
+					{"id":"PVT_2","number":2,"closed":false}
+				]}}}`,
+			},
+		}, &callCount))
+
+		id, err := client.findOldestOpenProject()
+
+		require.NoError(t, err)
+		assert.Equal(t, "PVT_2", id)
+		assert.Equal(t, 2, callCount)
+	})
+
+	t.Run("no open projects returns error", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				data: `{"organization":{"projectsV2":{"nodes":[
+					{"id":"PVT_1","number":1,"closed":true}
+				]}}}`,
+			},
+			"user": graphQLData{
+				data: `{"user":{"projectsV2":{"nodes":[
+					{"id":"PVT_2","number":2,"closed":true}
+				]}}}`,
+			},
+		}, &callCount))
+
+		_, err := client.findOldestOpenProject()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no open projects found")
+	})
+
+	t.Run("empty project list returns error", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				data: `{"organization":{"projectsV2":{"nodes":[]}}}`,
+			},
+			"user": graphQLData{
+				data: `{"user":{"projectsV2":{"nodes":[]}}}`,
+			},
+		}, &callCount))
+
+		_, err := client.findOldestOpenProject()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no open projects found")
+	})
+}
+
+func TestLookupProjectID(t *testing.T) {
+	t.Run("empty org ID falls through to user lookup", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				data: `{"organization":{"projectV2":{"id":""}}}`,
+			},
+			"user": graphQLData{
+				data: `{"user":{"projectV2":{"id":"PVT_user"}}}`,
+			},
+		}, &callCount))
+
+		id, err := client.lookupProjectID(1)
+
+		require.NoError(t, err)
+		assert.Equal(t, "PVT_user", id)
+		assert.Equal(t, 2, callCount)
+	})
+
+	t.Run("empty ID on both paths returns error", func(t *testing.T) {
+		var callCount int
+		client := newTestClient(t, graphQLRouter(t, map[string]any{
+			"organization": graphQLData{
+				data: `{"organization":{"projectV2":{"id":""}}}`,
+			},
+			"user": graphQLData{
+				data: `{"user":{"projectV2":{"id":""}}}`,
+			},
+		}, &callCount))
+
+		_, err := client.lookupProjectID(1)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "project #1 not found")
+		assert.Equal(t, 2, callCount)
+	})
+}
+
 func TestDoGraphQL(t *testing.T) {
 	t.Run("GraphQL-level error", func(t *testing.T) {
 		client := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {

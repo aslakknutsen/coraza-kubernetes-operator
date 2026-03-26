@@ -63,7 +63,7 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&cfg.owner, "owner", "", "repository owner")
 	fs.StringVar(&cfg.repo, "repo", "", "repository name")
 	fs.IntVar(&cfg.issue, "issue", 0, "issue number")
-	fs.IntVar(&cfg.project, "project", 1, "project board number")
+	fs.IntVar(&cfg.project, "project", 0, "project board number (default: auto-discover oldest open)")
 
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
@@ -261,10 +261,14 @@ func runTriagePR(client *GitHubClient, number int, iss *Issue, projectNumber int
 		log("PR already has a milestone, skipping")
 	}
 
-	log("Adding PR to project board #%d under Review", projectNumber)
 	if !dryRun {
-		if err := client.AddToProjectBoard(prInfo.NodeID, projectNumber, "Review"); err != nil {
-			log("Warning: could not add to project board: %v", err)
+		projectID, projectErr := resolveProjectID(client, projectNumber, log)
+		if projectErr != nil {
+			fmt.Fprintf(os.Stderr, "::warning::could not resolve project board: %v\n", projectErr)
+		} else {
+			if err := client.addItemToProject(projectID, prInfo.NodeID, "Review"); err != nil {
+				fmt.Fprintf(os.Stderr, "::warning::could not add to project board: %v\n", err)
+			}
 		}
 	}
 
@@ -306,6 +310,17 @@ func applyLabels(client *GitHubClient, number int, toAdd, toRemove []string, dry
 	}
 
 	return nil
+}
+
+// resolveProjectID returns the project node ID, either by looking up an
+// explicit project number or by auto-discovering the oldest open project.
+func resolveProjectID(client *GitHubClient, projectNumber int, log func(string, ...any)) (string, error) {
+	if projectNumber > 0 {
+		log("Looking up project board #%d", projectNumber)
+		return client.lookupProjectID(projectNumber)
+	}
+	log("Auto-discovering oldest open project board")
+	return client.findOldestOpenProject()
 }
 
 // assignMilestone finds the lowest semver milestone and assigns it to the
@@ -352,7 +367,7 @@ Flags:
   --owner           Repository owner (or GITHUB_OWNER env)
   --repo            Repository name (or GITHUB_REPO env)
   --issue           Issue/PR number (or GITHUB_ISSUE env)
-  --project         Project number for board management (default: 1)
+  --project         Project number for board management (default: auto-discover oldest open)
 
 Environment:
   GITHUB_TOKEN      GitHub API token (required)`
