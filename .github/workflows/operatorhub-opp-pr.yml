@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "helm/chart/**"
+      - "charts/coraza-kubernetes-operator/**"
       - "hack/generate_bundle.py"
       - "hack/operatorhub_opp_test.sh"
       - "bundle/**"
