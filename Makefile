@@ -283,6 +283,8 @@ BUNDLE_DIR ?= bundle
 CATALOG_DIR ?= catalog
 CATALOG_FILE ?= $(CATALOG_DIR)/coraza-kubernetes-operator/catalog.yaml
 OLM_CHANNEL ?= alpha
+# Bare semver (no v). Keep in sync with DEFAULT_MIN_KUBE_VERSION in hack/generate_bundle.py.
+KUBE_VERSION ?= 1.33.0
 
 .PHONY: bundle
 bundle: helm.sync ## Generate OLM bundle from Helm chart
@@ -292,11 +294,12 @@ bundle: helm.sync ## Generate OLM bundle from Helm chart
 		--version $(VERSION) \
 		--image $(CONTROLLER_MANAGER_CONTAINER_IMAGE) \
 		--channels $(OLM_CHANNEL) \
-		--default-channel $(OLM_CHANNEL)
+		--default-channel $(OLM_CHANNEL) \
+		--min-kube-version $(KUBE_VERSION)
 
 .PHONY: bundle.opp
 bundle.opp: bundle ## Run OPP kiwi tests against staged bundle (needs docker, ansible, jmespath)
-	OPERATOR_VERSION=$(VERSION:v%=%) ./hack/operatorhub_opp_test.sh
+	KIND_KUBE_VERSION=v$(KUBE_VERSION) OPERATOR_VERSION=$(VERSION:v%=%) ./hack/operatorhub_opp_test.sh
 
 .PHONY: bundle.build
 bundle.build: ## Build the OLM bundle image

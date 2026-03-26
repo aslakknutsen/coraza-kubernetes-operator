@@ -29,6 +29,9 @@ BUNDLE_RESOURCE_KINDS = {"Service"}
 EXCLUDED_KINDS = {"Namespace", "PodDisruptionBudget", "ServiceMonitor",
                   "ServiceAccount", "ClusterRole", "ClusterRoleBinding"}
 
+# Default when --min-kube-version is omitted. Keep in sync with KUBE_VERSION in the Makefile.
+DEFAULT_MIN_KUBE_VERSION = "1.33.0"
+
 # ---------------------------------------------------------------------------
 # Helm Rendering
 # ---------------------------------------------------------------------------
@@ -96,10 +99,12 @@ def override_container_image(deployment: dict, image: str):
 def build_csv(template_path: str, deployment: dict, cluster_role: dict,
               sa_name: str, version: str, image: str,
               replaces: str, channels: str, default_channel: str,
-              package_name: str) -> dict:
+              package_name: str, min_kube_version: str) -> dict:
     """Build the CSV by injecting Helm-rendered resources into the template."""
     with open(template_path) as f:
         csv = yaml.safe_load(f)
+
+    csv["spec"]["minKubeVersion"] = min_kube_version
 
     csv["metadata"]["name"] = f"{package_name}.v{version}"
     csv["metadata"]["annotations"]["containerImage"] = image
@@ -239,6 +244,12 @@ def main():
     parser.add_argument("--package-name", default="coraza-kubernetes-operator", help="OLM package name")
     parser.add_argument("--release-name", default="coraza-kubernetes-operator", help="Helm release name for rendering")
     parser.add_argument("--namespace", default="coraza-system", help="Namespace for Helm rendering")
+    parser.add_argument(
+        "--min-kube-version",
+        default=None,
+        metavar="SEMVER",
+        help=f"Kubernetes version for Helm --kube-version and CSV minKubeVersion (default: {DEFAULT_MIN_KUBE_VERSION})",
+    )
     args = parser.parse_args()
 
     version = args.version.lstrip("v")
@@ -249,9 +260,8 @@ def main():
     if not os.path.isfile(template_path):
         die(f"CSV template not found at {template_path}")
 
-    with open(template_path) as f:
-        csv_template = yaml.safe_load(f)
-    kube_version = csv_template.get("spec", {}).get("minKubeVersion", "1.33.0")
+    min_kube_version = args.min_kube_version or DEFAULT_MIN_KUBE_VERSION
+    kube_version = min_kube_version
 
     # Render Helm chart
     print("Rendering Helm chart...", file=sys.stderr)
@@ -287,6 +297,7 @@ def main():
         channels=args.channels,
         default_channel=args.default_channel,
         package_name=args.package_name,
+        min_kube_version=min_kube_version,
     )
     csv = strip_helm_labels(csv)
 

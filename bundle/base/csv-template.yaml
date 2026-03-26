@@ -71,7 +71,6 @@ spec:
     - email: "maintainers@coraza-kubernetes-operator.com"
       name: networking-incubator
   maturity: alpha
-  minKubeVersion: "1.33.0"
   nativeAPIs:
     - group: ""
       kind: ConfigMap
