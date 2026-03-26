@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from lib import die, run, write_yaml
+from lib import SemverYAML, die, run, write_yaml
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -103,7 +103,7 @@ def build_csv(template_path: str, deployment: dict, cluster_role: dict,
 
     csv["metadata"]["name"] = f"{package_name}.v{version}"
     csv["metadata"]["annotations"]["containerImage"] = image
-    csv["spec"]["version"] = version
+    csv["spec"]["version"] = SemverYAML(version)
 
     if replaces:
         csv["spec"]["replaces"] = replaces

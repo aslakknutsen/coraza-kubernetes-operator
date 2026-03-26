@@ -7,6 +7,25 @@ import sys
 import yaml
 
 # ---------------------------------------------------------------------------
+# YAML: semver scalars for OLM CSV
+# ---------------------------------------------------------------------------
+#
+# Unquoted "0.0.0" can round-trip through YAML→JSON as a number; CSV
+# spec.version uses OperatorVersion, whose UnmarshalJSON only accepts a JSON
+# string. Force double-quoted scalars so validation always sees a semver string.
+
+
+class SemverYAML(str):
+    """Semver string that PyYAML emits quoted (required for OLM CSV spec.version)."""
+
+
+def _represent_semver_yaml(dumper, data):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data), style='"')
+
+
+yaml.add_representer(SemverYAML, _represent_semver_yaml)
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
