@@ -10,6 +10,7 @@ jobs:
   publish-operatorhub:
     name: submit bundle to community-operators
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     # All v0.x releases are marked as pre-releases by release.yml, so this
     # workflow will not trigger until v1.0.0+. This is intentional — unstable
     # versions should not be published to OperatorHub.
@@ -36,17 +37,33 @@ jobs:
           python-version: "3.12"
 
       - name: install python dependencies
-        run: pip install -r hack/requirements.txt
-        if: hashFiles('hack/requirements.txt') != ''
-
-      - name: generate OLM bundle
-        run: make bundle VERSION=${{ github.event.release.tag_name }}
+        run: |
+          pip install PyYAML ansible jmespath
+          if [[ -f hack/requirements.txt ]]; then pip install -r hack/requirements.txt; fi
 
       - name: extract version
         id: version
         run: |
           TAG="${{ github.event.release.tag_name }}"
           echo "bare=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: generate OLM bundle
+        run: make bundle VERSION=${{ github.event.release.tag_name }}
+        env:
+          CONTROLLER_MANAGER_CONTAINER_IMAGE: ghcr.io/networking-incubator/coraza-kubernetes-operator:${{ github.event.release.tag_name }}
+
+      - name: OPP bundle test (kiwi)
+        run: ./hack/operatorhub_opp_test.sh --version "${{ steps.version.outputs.bare }}"
+
+      - name: print OPP logs on failure
+        if: failure()
+        run: |
+          cat /tmp/test.out 2>/dev/null || true
+          echo "--------------------------------------------------------------------------"
+          cat /tmp/op-test/log.out 2>/dev/null || true
+          if [[ -d /tmp/op-test ]]; then
+            find /tmp/op-test -maxdepth 3 -type f \( -name '*.log' -o -name '*.out' \) -print 2>/dev/null | head -40 || true
+          fi
 
       - name: submit to community-operators
         env:

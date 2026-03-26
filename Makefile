@@ -294,6 +294,10 @@ bundle: helm.sync ## Generate OLM bundle from Helm chart
 		--channels $(OLM_CHANNEL) \
 		--default-channel $(OLM_CHANNEL)
 
+.PHONY: bundle.opp
+bundle.opp: bundle ## Run OPP kiwi tests against staged bundle (needs docker, ansible, jmespath)
+	OPERATOR_VERSION=$(VERSION:v%=%) ./hack/operatorhub_opp_test.sh
+
 .PHONY: bundle.build
 bundle.build: ## Build the OLM bundle image
 	$(CONTAINER_TOOL) build -f $(BUNDLE_DIR)/bundle.Dockerfile -t $(BUNDLE_IMG) $(BUNDLE_DIR)
