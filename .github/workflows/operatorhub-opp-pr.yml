@@ -1,0 +1,63 @@
+# Path-filtered OPP (kiwi) run: validates bundle shape against community-operator
+# checks using a fixed public controller image (not the PR’s unreleased digest).
+name: operatorhub-opp-pr
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "helm/chart/**"
+      - "hack/generate_bundle.py"
+      - "hack/operatorhub_opp_test.sh"
+      - "bundle/**"
+      - "config/crd/**"
+      - "Makefile"
+
+jobs:
+  opp-kiwi:
+    name: OPP kiwi (bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: set up go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: set up helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: set up python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: install python dependencies
+        run: |
+          pip install PyYAML ansible jmespath
+          if [[ -f hack/requirements.txt ]]; then pip install -r hack/requirements.txt; fi
+
+      - name: generate bundle and run OPP
+        run: make bundle.opp
+        env:
+          VERSION: v0.0.0
+          CONTROLLER_MANAGER_CONTAINER_IMAGE: ghcr.io/networking-incubator/coraza-kubernetes-operator:latest
+
+      - name: print OPP logs on failure
+        if: failure()
+        run: |
+          cat /tmp/test.out 2>/dev/null || true
+          echo "--------------------------------------------------------------------------"
+          cat /tmp/op-test/log.out 2>/dev/null || true
+          if [[ -d /tmp/op-test ]]; then
+            find /tmp/op-test -maxdepth 3 -type f \( -name '*.log' -o -name '*.out' \) -print 2>/dev/null | head -40 || true
+          fi
