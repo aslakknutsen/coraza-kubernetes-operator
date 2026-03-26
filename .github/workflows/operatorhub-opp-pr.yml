@@ -49,7 +49,7 @@ jobs:
       - name: generate bundle and run OPP
         run: make bundle.opp
         env:
-          VERSION: v0.0.0
+          VERSION: v1.1.1
           CONTROLLER_MANAGER_CONTAINER_IMAGE: ghcr.io/networking-incubator/coraza-kubernetes-operator:latest
 
       - name: print OPP logs on failure
