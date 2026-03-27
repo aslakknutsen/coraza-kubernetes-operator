@@ -30,7 +30,7 @@ EXCLUDED_KINDS = {"Namespace", "PodDisruptionBudget", "ServiceMonitor",
                   "ServiceAccount", "ClusterRole", "ClusterRoleBinding"}
 
 # Default when --min-kube-version is omitted. Keep in sync with KUBE_VERSION in the Makefile.
-DEFAULT_MIN_KUBE_VERSION = "1.33.0"
+DEFAULT_MIN_KUBE_VERSION = "1.32.0"
 
 # ---------------------------------------------------------------------------
 # Helm Rendering

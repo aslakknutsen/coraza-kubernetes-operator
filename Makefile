@@ -284,7 +284,7 @@ CATALOG_DIR ?= catalog
 CATALOG_FILE ?= $(CATALOG_DIR)/coraza-kubernetes-operator/catalog.yaml
 OLM_CHANNEL ?= alpha
 # Bare semver (no v). Keep in sync with DEFAULT_MIN_KUBE_VERSION in hack/generate_bundle.py.
-KUBE_VERSION ?= 1.33.0
+KUBE_VERSION ?= 1.32.0
 
 .PHONY: bundle
 bundle: helm.sync ## Generate OLM bundle from Helm chart
