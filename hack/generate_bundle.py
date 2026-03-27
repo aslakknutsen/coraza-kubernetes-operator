@@ -226,6 +226,14 @@ COPY tests/scorecard /tests/scorecard/
 """)
     print(f"  wrote {dockerfile_path}", file=sys.stderr)
 
+    # OperatorHub repo expects operators/<name>/ci.yaml; source lives under bundle/base/.
+    ci_src = os.path.join(bundle_dir, "base", "ci.yaml")
+    ci_dest = os.path.join(bundle_dir, "ci.yaml")
+    if not os.path.isfile(ci_src):
+        die(f"OperatorHub ci.yaml not found at {ci_src}")
+    shutil.copy2(ci_src, ci_dest)
+    print(f"  wrote {ci_dest}", file=sys.stderr)
+
 
 # ---------------------------------------------------------------------------
 # Main
