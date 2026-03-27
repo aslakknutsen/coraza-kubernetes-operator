@@ -65,6 +65,11 @@ jobs:
             find /tmp/op-test -maxdepth 3 -type f \( -name '*.log' -o -name '*.out' \) -print 2>/dev/null | head -40 || true
           fi
 
+      - name: configure git credentials for GitHub HTTPS
+        env:
+          GH_TOKEN: ${{ secrets.OPERATORHUB_TOKEN }}
+        run: gh auth setup-git
+
       - name: submit to community-operators
         env:
           GITHUB_TOKEN: ${{ secrets.OPERATORHUB_TOKEN }}

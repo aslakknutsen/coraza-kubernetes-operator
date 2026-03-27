@@ -80,19 +80,8 @@ fi
 
 skip_in_dry_run() {
     if [[ "${DRY_RUN}" == true ]]; then
-        local out=() a
-        for a in "$@"; do
-            case "$a" in
-                http.extraHeader=*)
-                    out+=('http.extraHeader=<redacted>')
-                    ;;
-                *)
-                    out+=("$a")
-                    ;;
-            esac
-        done
         printf '[dry-run]'
-        printf ' %q' "${out[@]}"
+        printf ' %q' "$@"
         printf '\n'
         return 0
     fi
@@ -121,11 +110,6 @@ echo "Publishing ${OPERATOR_NAME} v${VERSION} to ${OWNER}/${OPERATOR_HUB}"
 HUB_REPO_URL="https://github.com/${OWNER}/${OPERATOR_HUB}.git"
 FORK_REPO_URL="https://github.com/${FORK}/${OPERATOR_HUB}.git"
 BRANCH="${OPERATOR_NAME}-${VERSION}"
-
-# GitHub git-over-HTTPS uses HTTP Basic (PAT as password), not the REST-style
-# "Authorization: token ..." header used by gh/curl.
-BASIC_AUTH="$(printf '%s' "x-access-token:${GITHUB_TOKEN}" | base64 | tr -d '\n')"
-AUTH_HEADER="Authorization: Basic ${BASIC_AUTH}"
 
 TMP_DIR="$(mktemp -d -t "${OPERATOR_NAME}.XXXXXXXXXX")"
 skip_in_dry_run trap 'rm -rf -- "${TMP_DIR}"' EXIT
@@ -167,7 +151,7 @@ git add "${OPERATORS_DIR}" "${CI_YAML_DEST}"
 git commit -s -m "${TITLE}"
 
 echo "Pushing branch ${BRANCH} to fork..."
-skip_in_dry_run git -c "http.extraHeader=${AUTH_HEADER}" push fork "${BRANCH}"
+skip_in_dry_run git push -u fork "${BRANCH}"
 
 echo "Opening PR against ${OWNER}/${OPERATOR_HUB}..."
 PR_BODY="$(cat "${REPO_ROOT}/hack/operatorhub-pr-template.md")"
