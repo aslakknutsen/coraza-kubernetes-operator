@@ -33,7 +33,7 @@ engines enforce.
 
 The operator is designed to run on:
 
-- **Kubernetes**: v1.33+
+- **Kubernetes**: v1.32+
 - **OpenShift Container Platform (OCP)**: v4.20+
 
 ### Supported Integrations
