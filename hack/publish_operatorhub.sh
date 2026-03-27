@@ -137,7 +137,7 @@ fi
 
 TITLE="operators ${OPERATOR_NAME} (${VERSION})"
 
-git add .
+git add "${OPERATORS_DIR}" "${CI_YAML_DEST}"
 git commit -s -m "${TITLE}"
 
 echo "Pushing branch ${BRANCH} to fork..."
