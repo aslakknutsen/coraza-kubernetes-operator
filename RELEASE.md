@@ -146,6 +146,7 @@ are specific to OLM:
 | File | Role |
 |---|---|
 | `bundle/base/csv-template.yaml` | CSV template — edit to change OLM metadata |
+| `bundle/base/ci.yaml` | OperatorHub PR metadata (`reviewers`, `updateGraph`); copied to `bundle/ci.yaml` by `make bundle` |
 | `hack/generate_bundle.py` | Generates bundle from Helm chart + CSV template |
 | `catalog/coraza-kubernetes-operator/catalog.yaml` | Package and channel definitions (no bundle content) |
 | `hack/update_catalog.py` | Adds new versions to catalog channel entries |
