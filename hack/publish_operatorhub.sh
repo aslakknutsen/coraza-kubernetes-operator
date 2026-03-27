@@ -107,7 +107,7 @@ BRANCH="${OPERATOR_NAME}-${VERSION}"
 AUTH_HEADER="Authorization: token ${GITHUB_TOKEN}"
 
 TMP_DIR="$(mktemp -d -t "${OPERATOR_NAME}.XXXXXXXXXX")"
-trap 'rm -rf -- "${TMP_DIR}"' EXIT
+skip_in_dry_run trap 'rm -rf -- "${TMP_DIR}"' EXIT
 
 echo "Cloning ${OWNER}/${OPERATOR_HUB}..."
 git clone --depth 1 "${HUB_REPO_URL}" "${TMP_DIR}"
