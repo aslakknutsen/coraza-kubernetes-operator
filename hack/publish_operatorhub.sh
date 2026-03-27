@@ -21,6 +21,7 @@ Options:
   --operator-hub REPO    Upstream repo name (default: community-operators)
   --fork FORK            Fork owner for the PR branch (default: \$GIT_USER)
   --dry-run              Skip push and PR creation, print what would happen
+  --force                Overwrite if operators/<name>/<version> already exists upstream
   -h, --help             Show this help
 EOF
 }
@@ -30,6 +31,7 @@ OWNER="k8s-operatorhub"
 OPERATOR_HUB="community-operators"
 FORK=""
 DRY_RUN=false
+FORCE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -38,6 +40,7 @@ while [[ $# -gt 0 ]]; do
         --operator-hub) OPERATOR_HUB="$2"; shift 2 ;;
         --fork)      FORK="$2";          shift 2 ;;
         --dry-run)   DRY_RUN=true;       shift ;;
+        --force)     FORCE=true;         shift ;;
         -h|--help)   show_help;          exit 0 ;;
         *) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
     esac
@@ -77,7 +80,20 @@ fi
 
 skip_in_dry_run() {
     if [[ "${DRY_RUN}" == true ]]; then
-        echo "[dry-run] $*"
+        local out=() a
+        for a in "$@"; do
+            case "$a" in
+                http.extraHeader=*)
+                    out+=('http.extraHeader=<redacted>')
+                    ;;
+                *)
+                    out+=("$a")
+                    ;;
+            esac
+        done
+        printf '[dry-run]'
+        printf ' %q' "${out[@]}"
+        printf '\n'
         return 0
     fi
     "$@"
@@ -88,6 +104,8 @@ if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "Error: version '${VERSION}' is not valid semver (expected X.Y.Z)" >&2
     exit 1
 fi
+
+OPERATORS_DIR="operators/${OPERATOR_NAME}/${VERSION}"
 
 BUNDLE_DIR="${REPO_ROOT}/bundle"
 BUNDLE_MANIFESTS="${BUNDLE_DIR}/manifests"
@@ -104,7 +122,10 @@ HUB_REPO_URL="https://github.com/${OWNER}/${OPERATOR_HUB}.git"
 FORK_REPO_URL="https://github.com/${FORK}/${OPERATOR_HUB}.git"
 BRANCH="${OPERATOR_NAME}-${VERSION}"
 
-AUTH_HEADER="Authorization: token ${GITHUB_TOKEN}"
+# GitHub git-over-HTTPS uses HTTP Basic (PAT as password), not the REST-style
+# "Authorization: token ..." header used by gh/curl.
+BASIC_AUTH="$(printf '%s' "x-access-token:${GITHUB_TOKEN}" | base64 | tr -d '\n')"
+AUTH_HEADER="Authorization: Basic ${BASIC_AUTH}"
 
 TMP_DIR="$(mktemp -d -t "${OPERATOR_NAME}.XXXXXXXXXX")"
 skip_in_dry_run trap 'rm -rf -- "${TMP_DIR}"' EXIT
@@ -121,7 +142,12 @@ git config user.email "${GIT_EMAIL}"
 
 git checkout -b "${BRANCH}"
 
-OPERATORS_DIR="operators/${OPERATOR_NAME}/${VERSION}"
+if [[ -d "${OPERATORS_DIR}" && "${FORCE}" != true ]]; then
+    echo "Error: ${OPERATORS_DIR} already exists in ${OWNER}/${OPERATOR_HUB} (this version may already be submitted)." >&2
+    echo "Refusing to overwrite. Use --force only if you intend to replace that tree." >&2
+    exit 1
+fi
+
 mkdir -p "${OPERATORS_DIR}/manifests"
 mkdir -p "${OPERATORS_DIR}/metadata"
 cp -a "${BUNDLE_MANIFESTS}/." "${OPERATORS_DIR}/manifests/"
