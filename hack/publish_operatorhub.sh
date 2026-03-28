@@ -138,12 +138,9 @@ cp -a "${BUNDLE_MANIFESTS}/." "${OPERATORS_DIR}/manifests/"
 cp -a "${BUNDLE_METADATA}/." "${OPERATORS_DIR}/metadata/"
 
 CI_YAML_DEST="operators/${OPERATOR_NAME}/ci.yaml"
-if [[ ! -f "${CI_YAML_DEST}" ]]; then
-    cp "${BUNDLE_DIR}/ci.yaml" "${CI_YAML_DEST}"
-    echo "Created ci.yaml (first submission)"
-else
-    echo "ci.yaml already exists, not overwriting"
-fi
+# bundle/base/ci.yaml (via bundle/ci.yaml) is the source of truth — always overwrite.
+cp "${BUNDLE_DIR}/ci.yaml" "${CI_YAML_DEST}"
+echo "Synced ci.yaml from bundle to ${CI_YAML_DEST}"
 
 TITLE="operators ${OPERATOR_NAME} (${VERSION})"
 

@@ -201,6 +201,10 @@ automatically:
 > `hack/publish_operatorhub.sh` locally (see `--help`). Before that, configure
 > HTTPS push to your fork (e.g. `GH_TOKEN=<PAT> gh auth setup-git` with the same
 > PAT as `OPERATORHUB_TOKEN`, or existing git credentials for the fork).
+>
+> The publish script overwrites `operators/<name>/ci.yaml` on the PR branch from
+> `bundle/ci.yaml` (from `bundle/base/ci.yaml`) every time so this repository
+> stays the source of truth for reviewers and `updateGraph`.
 
 1. Generates the OLM bundle for the release version
 2. Opens a PR to [`k8s-operatorhub/community-operators`] with the bundle
