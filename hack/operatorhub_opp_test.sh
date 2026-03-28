@@ -88,9 +88,8 @@ cp -a "${BUNDLE_MANIFESTS}/." "${OPERATORS_DIR}/manifests/"
 cp -a "${BUNDLE_METADATA}/." "${OPERATORS_DIR}/metadata/"
 
 CI_YAML_DEST="operators/${OPERATOR_NAME}/ci.yaml"
-if [[ ! -f "${CI_YAML_DEST}" ]]; then
-    cp "${BUNDLE_DIR}/ci.yaml" "${CI_YAML_DEST}"
-fi
+# Match publish_operatorhub.sh: bundle ci.yaml is the source of truth.
+cp "${BUNDLE_DIR}/ci.yaml" "${CI_YAML_DEST}"
 
 # Align with community OperatorHub k8s pipeline (see maistra istio-workspace test.sh).
 export OPP_CONTAINER_OPT="${OPP_CONTAINER_OPT:--t}"
