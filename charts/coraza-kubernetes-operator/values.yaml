@@ -28,8 +28,8 @@ istio:
   revision: ""
 
 # Default WASM plugin OCI URL when an Engine omits spec.driver.istio.wasm.image.
-# Keep in sync with internal/defaults.DefaultCorazaWasmOCIReference.
-defaultWasmImage: "oci://ghcr.io/networking-incubator/coraza-proxy-wasm:1902646ac7391b65be092cdec9b47d29fa5724c7"
+# When empty, the operator's built-in default (internal/defaults.DefaultCorazaWasmOCIReference) is used.
+defaultWasmImage: ""
 
 openshift:
   enabled: false
