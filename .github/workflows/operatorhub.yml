@@ -11,10 +11,12 @@ jobs:
     name: submit bundle to community-operators
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    # All v0.x releases are marked as pre-releases by release.yml, so this
-    # workflow will not trigger until v1.0.0+. This is intentional — unstable
-    # versions should not be published to OperatorHub.
-    if: ${{ !github.event.release.prerelease }}
+    # Disabled until a dedicated bot/service account can own OPERATORHUB_TOKEN
+    # and related repo configuration. Submit bundles manually; see RELEASE.md
+    # Step 6. TODO: https://github.com/networking-incubator/coraza-kubernetes-operator/issues/201
+    if: false
+    # When re-enabled: skip prereleases (v0.x are prereleases in release.yml).
+    # if: ${{ !github.event.release.prerelease }}
     steps:
       - name: checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

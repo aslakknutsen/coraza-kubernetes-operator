@@ -192,33 +192,52 @@ announcements get unpinned.
 
 ### Step 6 - OperatorHub
 
-When a non-prerelease is published, the [`operatorhub.yml`] workflow
-automatically:
+The [`operatorhub.yml`] workflow is **disabled** (`if: false` on the job) until
+a dedicated bot or service account can hold the PAT and related settings for
+pushing to a [`k8s-operatorhub/community-operators`] fork and opening PRs.
+Re-enabling that automation is tracked in [issue #201](https://github.com/networking-incubator/coraza-kubernetes-operator/issues/201).
 
-> **Note**: All `v0.x.x` releases are marked as pre-releases by
-> `release.yml`, so the OperatorHub workflow will not trigger until
-> `v1.0.0` or later. To submit a `v0.x` release manually, run
-> `hack/publish_operatorhub.sh` locally (see `--help`). Before that, configure
-> HTTPS push to your fork (e.g. `GH_TOKEN=<PAT> gh auth setup-git` with the same
-> PAT as `OPERATORHUB_TOKEN`, or existing git credentials for the fork).
->
-> The publish script overwrites `operators/<name>/ci.yaml` on the PR branch from
-> `bundle/ci.yaml` (from `bundle/base/ci.yaml`) every time so this repository
-> stays the source of truth for reviewers and `updateGraph`.
+Until then, submit the OLM bundle **locally** after the GitHub release exists
+and the operator image is published to GHCR.
 
-1. Generates the OLM bundle for the release version
-2. Opens a PR to [`k8s-operatorhub/community-operators`] with the bundle
+1. Check out the **release tag** (same commit you released).
 
-After publishing the release, check the [Actions page] for the
-`operatorhub` workflow run and monitor the resulting PR on
-community-operators for CI feedback.
+2. Generate the bundle with the **same** controller image reference as the
+   release (bare tag in `VERSION`, full image ref for the env):
 
-> **Note**: The workflow requires these repository secrets and variables:
-> - Secret `OPERATORHUB_TOKEN` — PAT with `repo` scope for the fork account
-> - Variable `OPERATORHUB_GIT_USER` — GitHub username for commits/sign-off
-> - Variable `OPERATORHUB_GIT_EMAIL` — Email for DCO sign-off
-> - Variable `OPERATORHUB_FORK_OWNER` — Owner of the community-operators fork
+   ```console
+   export CONTROLLER_MANAGER_CONTAINER_IMAGE=ghcr.io/networking-incubator/coraza-kubernetes-operator:vX.Y.Z
+   make bundle VERSION=vX.Y.Z
+   ```
+
+3. (Recommended) Run the same bundle test the workflow used:
+
+   ```console
+   ./hack/operatorhub_opp_test.sh --version X.Y.Z
+   ```
+
+   Use the **bare** semver (`X.Y.Z`, no `v`) for `--version`.
+
+4. Set credentials for commits and GitHub API access. The publish script
+   **requires** `GIT_USER`, `GIT_EMAIL`, and `GITHUB_TOKEN` (a PAT with `repo`
+   on the [`networking-incubator`] fork of community-operators). For HTTPS push,
+   run `gh auth setup-git` with that PAT (or use credentials your environment
+   already provides).
+
+5. Open the PR to community-operators:
+
+   ```console
+   ./hack/publish_operatorhub.sh --version X.Y.Z --fork networking-incubator
+   ```
+
+   Use `./hack/publish_operatorhub.sh --help` for options (`--dry-run`, `--fork`,
+   etc.). The script copies `bundle/ci.yaml` (from `bundle/base/ci.yaml` via
+   `make bundle`) into `operators/<name>/ci.yaml` on the PR branch so this repo
+   stays the source of truth for reviewers and `updateGraph`.
+
+6. Watch the PR on [`k8s-operatorhub/community-operators`] for OperatorHub CI
+   feedback until it merges.
 
 [`operatorhub.yml`]:https://github.com/networking-incubator/coraza-kubernetes-operator/blob/main/.github/workflows/operatorhub.yml
 [`k8s-operatorhub/community-operators`]:https://github.com/k8s-operatorhub/community-operators
-[Actions page]:https://github.com/networking-incubator/coraza-kubernetes-operator/actions
+[`networking-incubator`]:https://github.com/networking-incubator/community-operators
