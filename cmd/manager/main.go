@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -275,9 +276,29 @@ func setupHealthChecks(mgr ctrl.Manager) {
 // Validation
 // -----------------------------------------------------------------------------
 
+// maxDefaultWasmImageLen matches typical Kubernetes field limits for OCI URLs in WasmPlugin spec.url.
+const maxDefaultWasmImageLen = 1024
+
+func validateDefaultWasmImage(ref string) error {
+	if ref == "" {
+		return errors.New("must be non-empty")
+	}
+	if len(ref) > maxDefaultWasmImageLen {
+		return fmt.Errorf("must be at most %d characters (got %d)", maxDefaultWasmImageLen, len(ref))
+	}
+	if !strings.HasPrefix(ref, "oci://") {
+		return errors.New("must be an OCI reference starting with oci://")
+	}
+	return nil
+}
+
 func validateFlags(cfg config) {
 	if cfg.envoyClusterName == "" {
 		setupLog.Error(errors.New("missing required flag"), "envoy-cluster-name is required")
+		os.Exit(1)
+	}
+	if err := validateDefaultWasmImage(cfg.defaultWasmImage); err != nil {
+		setupLog.Error(err, "invalid default-wasm-image")
 		os.Exit(1)
 	}
 }

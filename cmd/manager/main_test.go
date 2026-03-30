@@ -18,11 +18,50 @@ package main
 
 import (
 	"crypto/tls"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// -----------------------------------------------------------------------------
+// validateDefaultWasmImage Tests
+// -----------------------------------------------------------------------------
+
+func TestValidateDefaultWasmImage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		assert.Error(t, validateDefaultWasmImage(""))
+	})
+
+	t.Run("not_oci", func(t *testing.T) {
+		t.Parallel()
+		assert.Error(t, validateDefaultWasmImage("docker.io/foo:latest"))
+		assert.Error(t, validateDefaultWasmImage("http://example/wasm"))
+	})
+
+	t.Run("too_long", func(t *testing.T) {
+		t.Parallel()
+		long := "oci://" + strings.Repeat("a", maxDefaultWasmImageLen+1-len("oci://"))
+		require.Len(t, long, maxDefaultWasmImageLen+1)
+		assert.Error(t, validateDefaultWasmImage(long))
+	})
+
+	t.Run("max_len_ok", func(t *testing.T) {
+		t.Parallel()
+		s := "oci://" + strings.Repeat("a", maxDefaultWasmImageLen-len("oci://"))
+		require.Len(t, s, maxDefaultWasmImageLen)
+		assert.NoError(t, validateDefaultWasmImage(s))
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, validateDefaultWasmImage("oci://ghcr.io/org/coraza-proxy-wasm:tag"))
+	})
+}
 
 // -----------------------------------------------------------------------------
 // buildTLSOpts Tests
