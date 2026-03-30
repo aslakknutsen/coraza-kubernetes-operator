@@ -40,8 +40,14 @@ jobs:
 
       - name: install python dependencies
         run: |
-          pip install PyYAML ansible jmespath
-          if [[ -f hack/requirements.txt ]]; then pip install -r hack/requirements.txt; fi
+          python -m pip install --upgrade pip
+          cat << 'EOF' > /tmp/operatorhub-requirements.txt
+          PyYAML==6.0.2
+          ansible==8.7.0
+          jmespath==1.0.1
+          EOF
+          python -m pip install -r /tmp/operatorhub-requirements.txt
+          if [[ -f hack/requirements.txt ]]; then python -m pip install -r hack/requirements.txt; fi
 
       - name: extract version
         id: version
