@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
 // -----------------------------------------------------------------------------
@@ -60,6 +62,21 @@ func TestValidateDefaultWasmImage(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		assert.NoError(t, validateDefaultWasmImage("oci://ghcr.io/org/coraza-proxy-wasm:tag"))
+	})
+}
+
+// -----------------------------------------------------------------------------
+// resolveDefaultWasmImage Tests
+// -----------------------------------------------------------------------------
+
+func TestResolveDefaultWasmImage(t *testing.T) {
+	t.Run("env var overrides hardcoded default", func(t *testing.T) {
+		t.Setenv("CORAZA_DEFAULT_WASM_IMAGE", "oci://custom/img:v1")
+		assert.Equal(t, "oci://custom/img:v1", resolveDefaultWasmImage())
+	})
+
+	t.Run("falls back to hardcoded default when env var unset", func(t *testing.T) {
+		assert.Equal(t, defaults.DefaultCorazaWasmOCIReference, resolveDefaultWasmImage())
 	})
 }
 

@@ -136,11 +136,6 @@ type config struct {
 func parseFlags() config {
 	var cfg config
 
-	defaultWasmImageFlagDefault := defaults.DefaultCorazaWasmOCIReference
-	if v := os.Getenv("CORAZA_DEFAULT_WASM_IMAGE"); v != "" {
-		defaultWasmImageFlagDefault = v
-	}
-
 	flag.StringVar(&cfg.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&cfg.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -160,7 +155,7 @@ func parseFlags() config {
 	flag.IntVar(&cfg.cacheServerPort, "cache-server-port", controller.DefaultRuleSetCacheServerPort, fmt.Sprintf("Port number for the RuleSet cache server to listen on (default %d)", controller.DefaultRuleSetCacheServerPort))
 	flag.StringVar(&cfg.envoyClusterName, "envoy-cluster-name", "", "The Envoy cluster name pointing to the RuleSet cache server (required)")
 	flag.StringVar(&cfg.istioRevision, "istio-revision", "", "The Istio revision label value for managed Istio resources")
-	flag.StringVar(&cfg.defaultWasmImage, "default-wasm-image", defaultWasmImageFlagDefault,
+	flag.StringVar(&cfg.defaultWasmImage, "default-wasm-image", resolveDefaultWasmImage(),
 		"Default OCI reference for the Coraza WASM plugin when an Engine omits spec.driver.istio.wasm.image")
 	flag.StringVar(&cfg.operatorName, "operator-name", "", "The operator release name used to derive managed resource names (when unset, Istio prerequisites are skipped)")
 
@@ -172,6 +167,13 @@ func parseFlags() config {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	return cfg
+}
+
+func resolveDefaultWasmImage() string {
+	if v := os.Getenv("CORAZA_DEFAULT_WASM_IMAGE"); v != "" {
+		return v
+	}
+	return defaults.DefaultCorazaWasmOCIReference
 }
 
 func buildTLSOpts(enableHTTP2 bool) []func(*tls.Config) {
