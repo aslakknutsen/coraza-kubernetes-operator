@@ -45,8 +45,8 @@ type IstioDriverConfig struct {
 // plugin with Istio.
 //
 // +kubebuilder:validation:XValidation:rule="self.mode == 'gateway' ? has(self.workloadSelector) : true",message="workloadSelector is required when mode is gateway"
-// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) == 0 || self.image.matches('^oci://')",message="image must start with oci:// when set"
-// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) == 0 || size(self.image) <= 1024",message="image must be at most 1024 characters when set"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || self.image.matches('^oci://')",message="image must start with oci:// when set"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) <= 1024",message="image must be at most 1024 characters when set"
 type IstioWasmConfig struct {
 	// mode specifies what mechanism will be used to integrate the WAF with
 	// Istio.
