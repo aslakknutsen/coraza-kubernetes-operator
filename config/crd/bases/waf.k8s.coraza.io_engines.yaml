@@ -161,10 +161,9 @@ spec:
                           rule: 'self.mode == ''gateway'' ? has(self.workloadSelector)
                             : true'
                         - message: image must start with oci:// when set
-                          rule: '!has(self.image) || size(self.image) == 0 || self.image.matches(''^oci://'')'
+                          rule: '!has(self.image) || self.image.matches(''^oci://'')'
                         - message: image must be at most 1024 characters when set
-                          rule: '!has(self.image) || size(self.image) == 0 || size(self.image)
-                            <= 1024'
+                          rule: '!has(self.image) || size(self.image) <= 1024'
                     type: object
                     x-kubernetes-validations:
                     - message: exactly one integration mechanism (Wasm, etc) must
