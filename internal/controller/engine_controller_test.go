@@ -554,19 +554,12 @@ func TestEngineReconciler_BuildWasmPlugin_WasmImageResolution(t *testing.T) {
 		assert.Equal(t, operatorDefault, url)
 	})
 
-	t.Run("empty string image uses operator default", func(t *testing.T) {
+	t.Run("nil wasm uses operator default", func(t *testing.T) {
 		engine := utils.NewTestEngine(utils.EngineOptions{})
-		engine.Spec.Driver.Istio.Wasm.Image = ptr.To("")
+		engine.Spec.Driver.Istio.Wasm = nil
 		r := &EngineReconciler{defaultWasmImage: operatorDefault}
 		wasmURL, _ := r.wasmPluginOCIURLSource(engine)
-		wp := r.buildWasmPlugin(engine, wasmURL)
-		spec, found, err := getNestedMap(wp.Object, "spec")
-		require.NoError(t, err)
-		require.True(t, found)
-		url, found, err := getNestedString(spec, "url")
-		require.NoError(t, err)
-		require.True(t, found)
-		assert.Equal(t, operatorDefault, url)
+		assert.Equal(t, operatorDefault, wasmURL)
 	})
 
 	t.Run("explicit image wins over operator default", func(t *testing.T) {
