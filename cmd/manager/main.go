@@ -71,6 +71,7 @@ var (
 
 func main() {
 	cfg := parseFlags()
+	logFlags()
 	validateFlags(cfg)
 
 	tlsOpts := buildTLSOpts(cfg.enableHTTP2)
@@ -174,6 +175,14 @@ func resolveDefaultWasmImage() string {
 		return v
 	}
 	return defaults.DefaultCorazaWasmOCIReference
+}
+
+func logFlags() {
+	var kvs []any
+	flag.VisitAll(func(f *flag.Flag) {
+		kvs = append(kvs, f.Name, f.Value.String())
+	})
+	setupLog.Info("configuration", kvs...)
 }
 
 func buildTLSOpts(enableHTTP2 bool) []func(*tls.Config) {
