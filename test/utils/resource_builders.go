@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
 // -----------------------------------------------------------------------------
@@ -122,7 +123,7 @@ func NewTestEngine(opts EngineOptions) *wafv1alpha1.Engine {
 		opts.RuleSetName = "test-ruleset"
 	}
 	if opts.WasmImage == "" {
-		opts.WasmImage = "oci://fake-registry.io/fake-image:latest"
+		opts.WasmImage = defaults.DefaultCorazaWasmOCIReference
 	}
 	if opts.PollIntervalSeconds == 0 {
 		opts.PollIntervalSeconds = 5
