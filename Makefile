@@ -96,6 +96,10 @@ release.kubectl-plugin: ## Cross-build kubectl-coraza binaries into dist/ (linux
 	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-amd64 ./cmd/kubectl-coraza
 	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/kubectl-coraza-darwin-arm64 ./cmd/kubectl-coraza
 
+.PHONY: release.operatorhub
+release.operatorhub: ## Submit OLM bundle to OperatorHub community-operators
+	hack/publish_operatorhub.sh --version $(VERSION:v%=%)
+
 # ------------------------------------------------------------------------------
 # Deployment
 # ------------------------------------------------------------------------------
@@ -279,6 +283,8 @@ BUNDLE_DIR ?= bundle
 CATALOG_DIR ?= catalog
 CATALOG_FILE ?= $(CATALOG_DIR)/coraza-kubernetes-operator/catalog.yaml
 OLM_CHANNEL ?= alpha
+# Bare semver (no v). Keep in sync with DEFAULT_MIN_KUBE_VERSION in hack/generate_bundle.py.
+KUBE_VERSION ?= 1.32.0
 
 .PHONY: bundle
 bundle: helm.sync ## Generate OLM bundle from Helm chart
@@ -288,7 +294,12 @@ bundle: helm.sync ## Generate OLM bundle from Helm chart
 		--version $(VERSION) \
 		--image $(CONTROLLER_MANAGER_CONTAINER_IMAGE) \
 		--channels $(OLM_CHANNEL) \
-		--default-channel $(OLM_CHANNEL)
+		--default-channel $(OLM_CHANNEL) \
+		--min-kube-version $(KUBE_VERSION)
+
+.PHONY: bundle.opp
+bundle.opp: bundle ## Run OPP kiwi tests against staged bundle (needs docker, ansible, jmespath)
+	KIND_KUBE_VERSION=v$(KUBE_VERSION) OPERATOR_VERSION=$(VERSION:v%=%) ./hack/operatorhub_opp_test.sh
 
 .PHONY: bundle.build
 bundle.build: ## Build the OLM bundle image

@@ -68,22 +68,15 @@ spec:
     - name: Coraza WAF
       url: https://coraza.io/
   maintainers:
-    - email: ""
+    - email: "maintainers@coraza-kubernetes-operator.com"
       name: networking-incubator
   maturity: alpha
-  minKubeVersion: "1.33.0"
   nativeAPIs:
     - group: ""
       kind: ConfigMap
       version: v1
     - group: ""
       kind: Pod
-      version: v1
-    - group: networking.istio.io
-      kind: ServiceEntry
-      version: v1
-    - group: networking.istio.io
-      kind: DestinationRule
       version: v1
   provider:
     name: networking-incubator

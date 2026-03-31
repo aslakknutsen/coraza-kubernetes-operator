@@ -1,0 +1,89 @@
+name: operatorhub
+
+permissions: read-all
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-operatorhub:
+    name: submit bundle to community-operators
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Disabled until a dedicated bot/service account can own OPERATORHUB_TOKEN
+    # and related repo configuration. Submit bundles manually; see RELEASE.md
+    # Step 6. TODO: https://github.com/networking-incubator/coraza-kubernetes-operator/issues/201
+    if: false
+    # When re-enabled: skip prereleases (v0.x are prereleases in release.yml).
+    # if: ${{ !github.event.release.prerelease }}
+    steps:
+      - name: checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: set up go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: set up helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: set up python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: install python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          cat << 'EOF' > /tmp/operatorhub-requirements.txt
+          PyYAML==6.0.2
+          ansible==8.7.0
+          jmespath==1.0.1
+          EOF
+          python -m pip install -r /tmp/operatorhub-requirements.txt
+          if [[ -f hack/requirements.txt ]]; then python -m pip install -r hack/requirements.txt; fi
+
+      - name: extract version
+        id: version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "bare=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: generate OLM bundle
+        run: make bundle VERSION=${{ github.event.release.tag_name }}
+        env:
+          CONTROLLER_MANAGER_CONTAINER_IMAGE: ghcr.io/networking-incubator/coraza-kubernetes-operator:${{ github.event.release.tag_name }}
+
+      - name: OPP bundle test (kiwi)
+        run: ./hack/operatorhub_opp_test.sh --version "${{ steps.version.outputs.bare }}"
+
+      - name: print OPP logs on failure
+        if: failure()
+        run: |
+          cat /tmp/test.out 2>/dev/null || true
+          echo "--------------------------------------------------------------------------"
+          cat /tmp/op-test/log.out 2>/dev/null || true
+          if [[ -d /tmp/op-test ]]; then
+            find /tmp/op-test -maxdepth 3 -type f \( -name '*.log' -o -name '*.out' \) -print 2>/dev/null | head -40 || true
+          fi
+
+      - name: configure git credentials for GitHub HTTPS
+        env:
+          GH_TOKEN: ${{ secrets.OPERATORHUB_TOKEN }}
+        run: gh auth setup-git
+
+      - name: submit to community-operators
+        env:
+          GITHUB_TOKEN: ${{ secrets.OPERATORHUB_TOKEN }}
+          GIT_USER: ${{ vars.OPERATORHUB_GIT_USER }}
+          GIT_EMAIL: ${{ vars.OPERATORHUB_GIT_EMAIL }}
+        run: |
+          hack/publish_operatorhub.sh \
+            --version "${{ steps.version.outputs.bare }}" \
+            --fork "${{ vars.OPERATORHUB_FORK_OWNER }}"
