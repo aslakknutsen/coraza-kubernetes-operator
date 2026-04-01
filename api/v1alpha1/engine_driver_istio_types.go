@@ -66,7 +66,7 @@ type IstioWasmConfig struct {
 	WorkloadSelector *metav1.LabelSelector `json:"workloadSelector,omitempty,omitzero"`
 
 	// image is the OCI image reference for the Coraza WASM plugin.
-	// If omitted or empty, the operator uses its configured default WASM OCI reference
+	// If omitted the operator uses its configured default WASM OCI reference
 	// (--default-wasm-image / CORAZA_DEFAULT_WASM_IMAGE).
 	//
 	// +optional
