@@ -75,12 +75,6 @@ engine according to the type and mode provided, and attaching it to a `Gateway`.
 > **Note**: For example: if the type is `istio` and the mode is `wasm`, it
 > will attach Coraza to an Istio `Gateway`, loading it via a [WASM] module.
 
-The `spec.driver.istio.wasm.image` field is optional: when omitted or empty, the
-operator uses its built-in default OCI reference (overridable with
-`--default-wasm-image` or the `CORAZA_DEFAULT_WASM_IMAGE` environment variable,
-or via Helm `defaultWasmImage`). For air-gapped clusters, set that default or
-set `image` on each `Engine`.
-
 `Engine` resources target a `RuleSet` to indicate the firewall rules that will
 be applied to all `Gateway` traffic. Poll intervals for `RuleSets` can be set
 to enable automatic and live rule updates on running `Engines`.
