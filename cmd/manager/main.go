@@ -287,15 +287,12 @@ func setupHealthChecks(mgr ctrl.Manager) {
 // Validation
 // -----------------------------------------------------------------------------
 
-// maxDefaultWasmImageLen matches typical Kubernetes field limits for OCI URLs in WasmPlugin spec.url.
-const maxDefaultWasmImageLen = 1024
-
 func validateDefaultWasmImage(ref string) error {
 	if ref == "" {
 		return errors.New("must be non-empty")
 	}
-	if len(ref) > maxDefaultWasmImageLen {
-		return fmt.Errorf("must be at most %d characters (got %d)", maxDefaultWasmImageLen, len(ref))
+	if len(ref) > wafv1alpha1.MaxImageLen {
+		return fmt.Errorf("must be at most %d characters (got %d)", wafv1alpha1.MaxImageLen, len(ref))
 	}
 	if !strings.HasPrefix(ref, "oci://") {
 		return errors.New("must be an OCI reference starting with oci://")

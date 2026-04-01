@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
@@ -47,15 +48,15 @@ func TestValidateDefaultWasmImage(t *testing.T) {
 
 	t.Run("too_long", func(t *testing.T) {
 		t.Parallel()
-		long := "oci://" + strings.Repeat("a", maxDefaultWasmImageLen+1-len("oci://"))
-		require.Len(t, long, maxDefaultWasmImageLen+1)
+		long := "oci://" + strings.Repeat("a", wafv1alpha1.MaxImageLen+1-len("oci://"))
+		require.Len(t, long, wafv1alpha1.MaxImageLen+1)
 		assert.Error(t, validateDefaultWasmImage(long))
 	})
 
 	t.Run("max_len_ok", func(t *testing.T) {
 		t.Parallel()
-		s := "oci://" + strings.Repeat("a", maxDefaultWasmImageLen-len("oci://"))
-		require.Len(t, s, maxDefaultWasmImageLen)
+		s := "oci://" + strings.Repeat("a", wafv1alpha1.MaxImageLen-len("oci://"))
+		require.Len(t, s, wafv1alpha1.MaxImageLen)
 		assert.NoError(t, validateDefaultWasmImage(s))
 	})
 

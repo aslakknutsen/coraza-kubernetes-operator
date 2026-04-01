@@ -119,4 +119,7 @@ type IstioIntegrationMode string
 const (
 	// IstioIntegrationModeGateway applies the filter at the Gateway level.
 	IstioIntegrationModeGateway IstioIntegrationMode = "gateway"
+
+	// MaxImageLen must match the CEL size constraint on IstioWasmConfig.Image.
+	MaxImageLen = 1024
 )
