@@ -1,0 +1,189 @@
+/*
+Copyright Coraza Kubernetes Operator contributors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cache
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
+)
+
+func TestMetricsRegistered(t *testing.T) {
+	registry := metrics.Registry
+
+	problems, err := testutil.GatherAndLint(registry,
+		"coraza_cache_server_requests_total",
+		"coraza_cache_server_request_duration_seconds",
+		"coraza_cache_server_in_flight_requests",
+	)
+	require.NoError(t, err)
+	assert.Empty(t, problems, "metric lint problems")
+}
+
+func TestHandlerLabel(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/rules/ns/name/latest", "latest"},
+		{"/rules/ns/name", "rules"},
+		{"/rules/", "rules"},
+		{"/rules/x/latest", "latest"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			assert.Equal(t, tt.want, handlerLabel(tt.path))
+		})
+	}
+}
+
+func TestStatusCapture_ExplicitWriteHeader(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sc := &statusCapture{ResponseWriter: rec}
+
+	sc.WriteHeader(http.StatusNotFound)
+	assert.Equal(t, http.StatusNotFound, sc.status())
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestStatusCapture_ImplicitOK(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sc := &statusCapture{ResponseWriter: rec}
+
+	_, err := sc.Write([]byte("hello"))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, sc.status())
+}
+
+func TestStatusCapture_DefaultWithoutWrite(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sc := &statusCapture{ResponseWriter: rec}
+
+	assert.Equal(t, http.StatusOK, sc.status())
+}
+
+func TestStatusCapture_WriteHeaderCalledOnce(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sc := &statusCapture{ResponseWriter: rec}
+
+	sc.WriteHeader(http.StatusBadRequest)
+	sc.WriteHeader(http.StatusOK) // second call should not change captured code
+	assert.Equal(t, http.StatusBadRequest, sc.status())
+}
+
+func TestStatusCapture_Unwrap(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sc := &statusCapture{ResponseWriter: rec}
+
+	assert.Equal(t, rec, sc.Unwrap())
+}
+
+func TestInstrumentHandler_RequestCounter(t *testing.T) {
+	requestsTotal.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/ns/name", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	val := testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "200"))
+	assert.Equal(t, float64(1), val)
+}
+
+func TestInstrumentHandler_LatestEndpoint(t *testing.T) {
+	requestsTotal.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/ns/name/latest", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	val := testutil.ToFloat64(requestsTotal.WithLabelValues("latest", "GET", "200"))
+	assert.Equal(t, float64(1), val)
+}
+
+func TestInstrumentHandler_ErrorResponse(t *testing.T) {
+	requestsTotal.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/ns/name", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	val := testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "404"))
+	assert.Equal(t, float64(1), val)
+}
+
+func TestInstrumentHandler_DurationObserved(t *testing.T) {
+	requestDuration.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/ns/name", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	count := testutil.CollectAndCount(requestDuration)
+	assert.Greater(t, count, 0, "histogram should have at least one metric family")
+}
+
+func TestInstrumentHandler_InFlightGauge(t *testing.T) {
+	inFlightRequests.Reset()
+
+	gaugeChecked := make(chan struct{})
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		val := testutil.ToFloat64(inFlightRequests.WithLabelValues("rules"))
+		assert.Equal(t, float64(1), val, "in-flight should be 1 while request is active")
+		close(gaugeChecked)
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/ns/name", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	<-gaugeChecked
+
+	val := testutil.ToFloat64(inFlightRequests.WithLabelValues("rules"))
+	assert.Equal(t, float64(0), val, "in-flight should be 0 after request completes")
+}
+
+func TestInstrumentHandler_MetricMetadata(t *testing.T) {
+	expected := `
+		# HELP coraza_cache_server_requests_total Total number of HTTP requests handled by the cache server.
+		# TYPE coraza_cache_server_requests_total counter
+	`
+	requestsTotal.Reset()
+	err := testutil.CollectAndCompare(requestsTotal, strings.NewReader(expected))
+	assert.NoError(t, err, "requestsTotal metadata mismatch")
+}
