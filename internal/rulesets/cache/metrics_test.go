@@ -20,8 +20,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/networking-incubator/coraza-kubernetes-operator/test/utils"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -186,4 +188,106 @@ func TestInstrumentHandler_MetricMetadata(t *testing.T) {
 	requestsTotal.Reset()
 	err := testutil.CollectAndCompare(requestsTotal, strings.NewReader(expected))
 	assert.NoError(t, err, "requestsTotal metadata mismatch")
+}
+
+// Adversarial: non-GET methods must record real HTTP method and status (e.g. 405), not assume GET.
+func TestInstrumentHandler_NonGETMethodAndStatus(t *testing.T) {
+	requestsTotal.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	})
+	handler := instrumentHandler(inner)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/rules/ns/name", nil)
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+			val := testutil.ToFloat64(requestsTotal.WithLabelValues("rules", method, "405"))
+			assert.Equal(t, float64(1), val, "counter for %s", method)
+			requestsTotal.Reset()
+		})
+	}
+}
+
+// Adversarial: paths containing "/latest" in the middle must not be labeled "latest" (suffix-only rule).
+func TestHandlerLabel_LatestOnlyAsPathSuffix(t *testing.T) {
+	assert.Equal(t, "rules", handlerLabel("/rules/a/latest/b"))
+	assert.Equal(t, "latest", handlerLabel("/rules/a/latest"))
+}
+
+func TestHandlerLabel_UnicodePath(t *testing.T) {
+	assert.Equal(t, "latest", handlerLabel("/rules/ns/"+string([]rune{0x540d, 0x524d})+"/latest"))
+}
+
+// Adversarial: many overlapping requests must not leak in-flight gauge.
+func TestInstrumentHandler_ConcurrentInFlightReturnsToZero(t *testing.T) {
+	inFlightRequests.Reset()
+	requestsTotal.Reset()
+
+	const n = 48
+	start := make(chan struct{})
+	entered := make(chan struct{}, n)
+	var wg sync.WaitGroup
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-start
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := instrumentHandler(inner)
+
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/rules/concurrent", nil)
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+		}()
+	}
+	for i := 0; i < n; i++ {
+		<-entered
+	}
+	close(start)
+	wg.Wait()
+
+	assert.Equal(t, float64(0), testutil.ToFloat64(inFlightRequests.WithLabelValues("rules")))
+	assert.Equal(t, float64(n), testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "200")))
+}
+
+// Adversarial: panic in inner handler must still run deferred in-flight decrement (no gauge leak).
+func TestInstrumentHandler_PanicDecrementsInFlight(t *testing.T) {
+	inFlightRequests.Reset()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("forced panic for middleware teardown")
+	})
+	handler := instrumentHandler(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/x", nil)
+	defer func() {
+		r := recover()
+		require.NotNil(t, r)
+		assert.Equal(t, float64(0), testutil.ToFloat64(inFlightRequests.WithLabelValues("rules")))
+	}()
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	t.Fatal("expected panic")
+}
+
+// End-to-end: real server mux + instrumentHandler records metrics (same wiring as production).
+func TestServer_InstrumentedMuxRecordsRequestMetrics(t *testing.T) {
+	requestsTotal.Reset()
+	inFlightRequests.Reset()
+
+	cache := NewRuleSetCache()
+	cache.Put("k", "rules", nil)
+	logger := utils.NewTestLogger(t)
+	srv := NewServer(cache, ":0", logger, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/k", nil)
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	assert.Equal(t, float64(1), testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "200")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(inFlightRequests.WithLabelValues("rules")))
 }
