@@ -295,3 +295,23 @@ func TestServer_InstrumentedMuxRecordsRequestMetrics(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "200")))
 	assert.Equal(t, float64(0), testutil.ToFloat64(inFlightRequests.WithLabelValues("rules")))
 }
+
+// Regression: GET /rules/latest routes to handleGetRules("latest"), not handleLatest; metrics must use handler=rules.
+func TestServer_GETRulesLatestPathUsesRulesHandlerLabel(t *testing.T) {
+	requestsTotal.Reset()
+	inFlightRequests.Reset()
+
+	cache := NewRuleSetCache()
+	cache.Put("latest", "rules", nil)
+	logger := utils.NewTestLogger(t)
+	srv := NewServer(cache, ":0", logger, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/latest", nil)
+	rec := httptest.NewRecorder()
+	srv.srv.Handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	assert.Equal(t, float64(1), testutil.ToFloat64(requestsTotal.WithLabelValues("rules", "GET", "200")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(requestsTotal.WithLabelValues("latest", "GET", "200")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(inFlightRequests.WithLabelValues("rules")))
+}
