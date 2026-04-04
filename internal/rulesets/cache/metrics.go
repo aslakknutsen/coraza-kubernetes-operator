@@ -78,9 +78,17 @@ func instrumentHandler(next http.Handler) http.Handler {
 	})
 }
 
-// handlerLabel derives a short handler label from the request path.
-func handlerLabel(path string) string {
-	if strings.HasSuffix(path, "/latest") {
+// handlerLabel derives a short handler label matching handleRules routing: trim
+// the "/rules/" prefix, then treat paths with suffix "/latest" as the latest
+// handler (same as strings.CutSuffix(path, "/latest") in handleRules). This
+// differs from a naive URL suffix check: GET /rules/latest is full-rules routing
+// (cache key "latest"), not the latest-metadata endpoint.
+func handlerLabel(urlPath string) string {
+	if !strings.HasPrefix(urlPath, "/rules/") {
+		return "rules"
+	}
+	path := strings.TrimPrefix(urlPath, "/rules/")
+	if _, ok := strings.CutSuffix(path, "/latest"); ok {
 		return "latest"
 	}
 	return "rules"

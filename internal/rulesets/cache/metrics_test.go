@@ -51,6 +51,8 @@ func TestHandlerLabel(t *testing.T) {
 		{"/rules/ns/name", "rules"},
 		{"/rules/", "rules"},
 		{"/rules/x/latest", "latest"},
+		// Matches handleRules: path "latest" does not have suffix "/latest", so GetRules("latest").
+		{"/rules/latest", "rules"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
@@ -214,6 +216,8 @@ func TestInstrumentHandler_NonGETMethodAndStatus(t *testing.T) {
 func TestHandlerLabel_LatestOnlyAsPathSuffix(t *testing.T) {
 	assert.Equal(t, "rules", handlerLabel("/rules/a/latest/b"))
 	assert.Equal(t, "latest", handlerLabel("/rules/a/latest"))
+	// Single-segment "latest" is not CutSuffix(path, "/latest") in handleRules; label must be "rules".
+	assert.Equal(t, "rules", handlerLabel("/rules/latest"))
 }
 
 func TestHandlerLabel_UnicodePath(t *testing.T) {
