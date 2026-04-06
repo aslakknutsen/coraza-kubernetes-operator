@@ -146,6 +146,7 @@ are specific to OLM:
 | File | Role |
 |---|---|
 | `bundle/base/csv-template.yaml` | CSV template — edit to change OLM metadata |
+| `bundle/base/ci.yaml` | OperatorHub PR metadata (`reviewers`, `updateGraph`); copied to `bundle/ci.yaml` by `make bundle` |
 | `hack/generate_bundle.py` | Generates bundle from Helm chart + CSV template |
 | `catalog/coraza-kubernetes-operator/catalog.yaml` | Package and channel definitions (no bundle content) |
 | `hack/update_catalog.py` | Adds new versions to catalog channel entries |
@@ -188,3 +189,55 @@ Make sure the latest release announcement is pinned, and older release
 announcements get unpinned.
 
 [immutable releases]:https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases
+
+### Step 6 - OperatorHub
+
+The [`operatorhub.yml`] workflow is **disabled** (`if: false` on the job) until
+a dedicated bot or service account can hold the PAT and related settings for
+pushing to a [`k8s-operatorhub/community-operators`] fork and opening PRs.
+Re-enabling that automation is tracked in [issue #201](https://github.com/networking-incubator/coraza-kubernetes-operator/issues/201).
+
+Until then, submit the OLM bundle **locally** after the GitHub release exists
+and the operator image is published to GHCR.
+
+1. Check out the **release tag** (same commit you released).
+
+2. Generate the bundle with the **same** controller image reference as the
+   release (bare tag in `VERSION`, full image ref for the env):
+
+   ```console
+   export CONTROLLER_MANAGER_CONTAINER_IMAGE=ghcr.io/networking-incubator/coraza-kubernetes-operator:vX.Y.Z
+   make bundle VERSION=vX.Y.Z
+   ```
+
+3. (Recommended) Run the same bundle test the workflow used:
+
+   ```console
+   ./hack/operatorhub_opp_test.sh --version X.Y.Z
+   ```
+
+   Use the **bare** semver (`X.Y.Z`, no `v`) for `--version`.
+
+4. Set credentials for commits and GitHub API access. The publish script
+   **requires** `GIT_USER`, `GIT_EMAIL`, and `GITHUB_TOKEN` (a PAT with `repo`
+   on the [`networking-incubator`] fork of community-operators). For HTTPS push,
+   run `gh auth setup-git` with that PAT (or use credentials your environment
+   already provides).
+
+5. Open the PR to community-operators:
+
+   ```console
+   ./hack/publish_operatorhub.sh --version X.Y.Z --fork networking-incubator
+   ```
+
+   Use `./hack/publish_operatorhub.sh --help` for options (`--dry-run`, `--fork`,
+   etc.). The script copies `bundle/ci.yaml` (from `bundle/base/ci.yaml` via
+   `make bundle`) into `operators/<name>/ci.yaml` on the PR branch so this repo
+   stays the source of truth for reviewers and `updateGraph`.
+
+6. Watch the PR on [`k8s-operatorhub/community-operators`] for OperatorHub CI
+   feedback until it merges.
+
+[`operatorhub.yml`]:https://github.com/networking-incubator/coraza-kubernetes-operator/blob/main/.github/workflows/operatorhub.yml
+[`k8s-operatorhub/community-operators`]:https://github.com/k8s-operatorhub/community-operators
+[`networking-incubator`]:https://github.com/networking-incubator/community-operators
