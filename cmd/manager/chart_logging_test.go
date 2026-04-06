@@ -52,6 +52,14 @@ func TestValuesYAML_DefaultLoggingNotDevelopment(t *testing.T) {
 	assert.Contains(t, s, "development: false")
 }
 
+func TestChartREADME_ListsLoggingDevelopment(t *testing.T) {
+	root := testRepoRoot(t)
+	b, err := os.ReadFile(filepath.Join(root, "charts/coraza-kubernetes-operator/README.md"))
+	require.NoError(t, err)
+	s := string(b)
+	assert.Contains(t, s, "`logging.development`")
+}
+
 func TestDeploymentTemplate_PassesZapDevelFromValues(t *testing.T) {
 	root := testRepoRoot(t)
 	b, err := os.ReadFile(filepath.Join(root, "charts/coraza-kubernetes-operator/templates/deployment.yaml"))
