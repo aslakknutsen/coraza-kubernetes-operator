@@ -154,7 +154,7 @@ func parseFlags() config {
 	flag.StringVar(&cfg.istioRevision, "istio-revision", "", "The Istio revision label value for managed Istio resources")
 	flag.StringVar(&cfg.operatorName, "operator-name", "", "The operator release name used to derive managed resource names (when unset, Istio prerequisites are skipped)")
 
-	opts := zap.Options{Development: true}
+	var opts zap.Options
 	opts.BindFlags(flag.CommandLine)
 
 	flag.Parse()

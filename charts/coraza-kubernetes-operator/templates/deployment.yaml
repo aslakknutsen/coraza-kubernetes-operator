@@ -55,6 +55,7 @@ spec:
             - --istio-revision={{ .Values.istio.revision }}
             {{- end }}
             - --operator-name={{ include "coraza-operator.fullname" . }}
+            - --zap-devel={{ .Values.logging.development }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
