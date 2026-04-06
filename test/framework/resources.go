@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
 // Resource builders, GVRs, and CRUD helpers for integration tests.
@@ -118,13 +119,11 @@ type EngineOpts struct {
 // Defaults
 // -----------------------------------------------------------------------------
 
-const fallbackWasmImage = "oci://ghcr.io/networking-incubator/coraza-proxy-wasm:1902646ac7391b65be092cdec9b47d29fa5724c7"
-
 func defaultWasmImage() string {
 	if img := os.Getenv("CORAZA_WASM_IMAGE"); img != "" {
 		return img
 	}
-	return fallbackWasmImage
+	return defaults.DefaultCorazaWasmOCIReference
 }
 
 const fallbackEchoImage = "registry.k8s.io/gateway-api/echo-basic:v20251204-v1.4.1"
@@ -278,7 +277,7 @@ func BuildEngine(namespace, name string, opts EngineOpts) *unstructured.Unstruct
 			Driver: &wafv1alpha1.DriverConfig{
 				Istio: &wafv1alpha1.IstioDriverConfig{
 					Wasm: &wafv1alpha1.IstioWasmConfig{
-						Image:            opts.WasmImage,
+						Image:            ptr.To(opts.WasmImage),
 						Mode:             ptr.To(wafv1alpha1.IstioIntegrationModeGateway),
 						WorkloadSelector: labelSelector,
 						RuleSetCacheServer: &wafv1alpha1.RuleSetCacheServerConfig{

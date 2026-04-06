@@ -45,6 +45,8 @@ type IstioDriverConfig struct {
 // plugin with Istio.
 //
 // +kubebuilder:validation:XValidation:rule="self.mode == 'gateway' ? has(self.workloadSelector) : true",message="workloadSelector is required when mode is gateway"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || self.image.matches('^oci://')",message="image must start with oci:// when set"
+// +kubebuilder:validation:XValidation:rule="!has(self.image) || size(self.image) <= 1024",message="image must be at most 1024 characters when set"
 type IstioWasmConfig struct {
 	// mode specifies what mechanism will be used to integrate the WAF with
 	// Istio.
@@ -64,12 +66,11 @@ type IstioWasmConfig struct {
 	WorkloadSelector *metav1.LabelSelector `json:"workloadSelector,omitempty,omitzero"`
 
 	// image is the OCI image reference for the Coraza WASM plugin.
+	// If omitted the operator uses its configured default WASM OCI reference
+	// (--default-wasm-image / CORAZA_DEFAULT_WASM_IMAGE).
 	//
-	// +required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=1024
-	// +kubebuilder:validation:Pattern=`^oci://`
-	Image string `json:"image,omitempty"`
+	// +optional
+	Image *string `json:"image,omitempty"`
 
 	// imagePullSecret is the name of a Kubernetes Secret in the same namespace
 	// as the Engine that contains Docker registry credentials for pulling the
@@ -127,4 +128,7 @@ type IstioIntegrationMode string
 const (
 	// IstioIntegrationModeGateway applies the filter at the Gateway level.
 	IstioIntegrationModeGateway IstioIntegrationMode = "gateway"
+
+	// MaxImageLen must match the CEL size constraint on IstioWasmConfig.Image.
+	MaxImageLen = 1024
 )
