@@ -365,7 +365,7 @@ func TestEngineReconciler_ImagePullSecretInWasmPlugin(t *testing.T) {
 			ImagePullSecret: "my-registry-secret",
 		})
 
-		wasmPlugin := reconciler.buildWasmPlugin(engine)
+		wasmPlugin := reconciler.buildWasmPlugin(engine, "")
 
 		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
 		require.NoError(t, err)
@@ -383,7 +383,7 @@ func TestEngineReconciler_ImagePullSecretInWasmPlugin(t *testing.T) {
 			Namespace: testNamespace,
 		})
 
-		wasmPlugin := reconciler.buildWasmPlugin(engine)
+		wasmPlugin := reconciler.buildWasmPlugin(engine, "")
 
 		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
 		require.NoError(t, err)
