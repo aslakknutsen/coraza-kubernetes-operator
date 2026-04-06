@@ -78,7 +78,7 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	logDebug(log, req, "Engine", "Finding matched Gateways")
 	gateways, gwErr := r.matchedGateways(ctx, log, req, &engine)
 	if gwErr != nil {
-		logError(log, req, "Engine", gwErr, "Failed to find matched Gateways, not updating Gateway status")
+		logAPIError(log, req, "Engine", gwErr, "Failed to find matched Gateways, not updating Gateway status", &engine)
 	}
 
 	// Status patching is kept inline because it mutates engine.Status.Gateways
@@ -90,7 +90,7 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	}
 	setStatusReady(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "Configured", "WasmPlugin successfully created/updated")
 	if err := r.Status().Patch(ctx, &engine, patch); err != nil {
-		logError(log, req, "Engine", err, "Failed to patch status")
+		logAPIError(log, req, "Engine", err, "Failed to patch status", &engine)
 		return ctrl.Result{}, err
 	}
 	r.Recorder.Eventf(&engine, nil, "Normal", "WasmPluginCreated", "Provision", "Created WasmPlugin %s/%s", wasmPlugin.GetNamespace(), wasmPlugin.GetName())
@@ -118,7 +118,7 @@ func (r *EngineReconciler) applyWasmPlugin(ctx context.Context, log logr.Logger,
 
 	logDebug(log, req, "Engine", "Applying WasmPlugin", "wasmPluginName", wasmPlugin.GetName())
 	if err := serverSideApply(ctx, r.Client, wasmPlugin); err != nil {
-		logError(log, req, "Engine", err, "Failed to create or update WasmPlugin")
+		logAPIError(log, req, "Engine", err, "Failed to create or update WasmPlugin", engine)
 		return nil, err
 	}
 

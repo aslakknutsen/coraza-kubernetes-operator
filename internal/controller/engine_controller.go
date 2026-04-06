@@ -135,7 +135,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, nil
 		}
 
-		logError(log, req, "Engine", err, "Failed to get")
+		logAPIError(log, req, "Engine", err, "Failed to get", nil)
 		return ctrl.Result{}, err
 	}
 
@@ -165,7 +165,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		patch := client.MergeFrom(engine.DeepCopy())
 		setStatusProgressing(log, req, "Engine", &engine.Status.Conditions, engine.Generation, "Reconciling", "Starting reconciliation")
 		if err := r.Status().Patch(ctx, &engine, patch); err != nil {
-			logError(log, req, "Engine", err, "Failed to patch initial status")
+			logAPIError(log, req, "Engine", err, "Failed to patch initial status", &engine)
 			return ctrl.Result{}, err
 		}
 	}
@@ -235,7 +235,7 @@ func (r *EngineReconciler) isRuleSetDegraded(ctx context.Context, log logr.Logge
 			}
 			return true, nil
 		}
-		logError(log, req, "Engine", err, "Failed to get RuleSet")
+		logAPIError(log, req, "Engine", err, "Failed to get RuleSet", engine)
 		return false, fmt.Errorf("failed to get RuleSet %s: %w", engine.Spec.RuleSet.Name, err)
 	}
 	if ruleSet.Status == nil {

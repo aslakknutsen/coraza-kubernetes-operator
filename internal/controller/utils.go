@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -61,9 +62,103 @@ func logError(log logr.Logger, req ctrl.Request, kind string, err error, msg str
 	log.Error(err, fmt.Sprintf("%s: %s", kind, msg), args...)
 }
 
+// logAPIError logs an error from a Kubernetes API call, enriching it with
+// resourceVersion (from obj, when non-nil), HTTP status code, API reason,
+// and retryAfterSeconds when the error is or wraps a *apierrors.StatusError.
+//
+// Workqueue retry/attempt count is not available inside Reconcile without a
+// cross-cutting wrapper or metrics integration; that is left for a follow-up.
+func logAPIError(log logr.Logger, req ctrl.Request, kind string, err error, msg string, obj client.Object, extra ...any) {
+	args := append([]any{"namespace", req.Namespace, "name", req.Name}, extra...)
+
+	if obj != nil {
+		if rv := obj.GetResourceVersion(); rv != "" {
+			args = append(args, "resourceVersion", rv)
+		}
+	}
+
+	args = append(args, extractStatusErrorFields(err)...)
+	log.Error(err, fmt.Sprintf("%s: %s", kind, msg), args...)
+}
+
+// extractStatusErrorFields returns structured key/value pairs from a
+// *apierrors.StatusError if err is or wraps one.
+func extractStatusErrorFields(err error) []any {
+	var statusErr *apierrors.StatusError
+	if !errors.As(err, &statusErr) {
+		return nil
+	}
+
+	st := statusErr.Status()
+	fields := []any{
+		"apiStatusCode", st.Code,
+		"apiReason", string(st.Reason),
+	}
+
+	if st.Details != nil && st.Details.RetryAfterSeconds > 0 {
+		fields = append(fields, "retryAfterSeconds", st.Details.RetryAfterSeconds)
+	}
+
+	return fields
+}
+
 // -----------------------------------------------------------------------------
 // Status Condition Helpers
 // -----------------------------------------------------------------------------
+
+// trackedConditionTypes are the operator-owned condition types whose transitions
+// are logged at Info level.
+var trackedConditionTypes = []string{"Ready", "Degraded", "Progressing"}
+
+// conditionSnapshot captures the Status and Reason of each tracked condition
+// type before mutation. A nil entry means the condition was absent.
+type conditionSnapshot map[string]*metav1.Condition
+
+func snapshotConditions(conditions []metav1.Condition) conditionSnapshot {
+	snap := make(conditionSnapshot, len(trackedConditionTypes))
+	for _, ct := range trackedConditionTypes {
+		if c := apimeta.FindStatusCondition(conditions, ct); c != nil {
+			cpy := *c
+			snap[ct] = &cpy
+		}
+	}
+	return snap
+}
+
+// logConditionTransitions compares before and after snapshots and logs at Info
+// for each tracked condition whose Status changed, appeared, or disappeared.
+// Idempotent no-ops (same Status+Reason) are silent.
+func logConditionTransitions(log logr.Logger, req ctrl.Request, kind string, before conditionSnapshot, after []metav1.Condition) {
+	for _, ct := range trackedConditionTypes {
+		prev := before[ct]
+		cur := apimeta.FindStatusCondition(after, ct)
+
+		switch {
+		case prev == nil && cur == nil:
+			continue
+		case prev == nil && cur != nil:
+			logInfo(log, req, kind, "Condition set",
+				"condition", ct,
+				"fromStatus", "",
+				"toStatus", string(cur.Status),
+				"reason", cur.Reason)
+		case prev != nil && cur == nil:
+			logInfo(log, req, kind, "Condition removed",
+				"condition", ct,
+				"fromStatus", string(prev.Status),
+				"toStatus", "")
+		default:
+			if prev.Status == cur.Status && prev.Reason == cur.Reason {
+				continue
+			}
+			logInfo(log, req, kind, "Condition changed",
+				"condition", ct,
+				"fromStatus", string(prev.Status),
+				"toStatus", string(cur.Status),
+				"reason", cur.Reason)
+		}
+	}
+}
 
 // setConditionTrue is a helper function to set metav1.Conditions to True.
 func setConditionTrue(conditions *[]metav1.Condition, generation int64, conditionType, reason, message string) {
@@ -91,17 +186,19 @@ func setConditionFalse(conditions *[]metav1.Condition, generation int64, conditi
 
 // setStatusConditionDegraded is a helper to mark a resource as degraded.
 func setStatusConditionDegraded(log logr.Logger, req ctrl.Request, kind string, conditions *[]metav1.Condition, generation int64, reason, message string) {
-	logDebug(log, req, kind, fmt.Sprintf("Setting degraded status: %s", reason))
+	before := snapshotConditions(*conditions)
 	setConditionFalse(conditions, generation, "Ready", reason, message)
 	setConditionTrue(conditions, generation, "Degraded", reason, message)
 	apimeta.RemoveStatusCondition(conditions, "Progressing")
+	logConditionTransitions(log, req, kind, before, *conditions)
 }
 
 // setStatusProgressing is a helper to mark a resource as actively progressing.
 func setStatusProgressing(log logr.Logger, req ctrl.Request, kind string, conditions *[]metav1.Condition, generation int64, reason, message string) {
-	logDebug(log, req, kind, fmt.Sprintf("Setting progressing status: %s", reason))
+	before := snapshotConditions(*conditions)
 	setConditionFalse(conditions, generation, "Ready", reason, message)
 	setConditionTrue(conditions, generation, "Progressing", reason, message)
+	logConditionTransitions(log, req, kind, before, *conditions)
 }
 
 // maxEventNoteBytes is the maximum size of the note field in events.k8s.io/v1.
@@ -136,7 +233,7 @@ func patchDegraded(
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	setStatusConditionDegraded(log, req, kind, conditions, generation, reason, message)
 	if err := statusWriter.Patch(ctx, obj, patch); err != nil {
-		logError(log, req, kind, err, "Failed to patch status")
+		logAPIError(log, req, kind, err, "Failed to patch status", obj)
 		return err
 	}
 	return nil
@@ -144,10 +241,11 @@ func patchDegraded(
 
 // setStatusReady is a helper to mark a resource as ready, fully reconciled.
 func setStatusReady(log logr.Logger, req ctrl.Request, kind string, conditions *[]metav1.Condition, generation int64, reason, message string) {
-	logDebug(log, req, kind, fmt.Sprintf("Setting ready status: %s", reason))
+	before := snapshotConditions(*conditions)
 	setConditionTrue(conditions, generation, "Ready", reason, message)
 	apimeta.RemoveStatusCondition(conditions, "Degraded")
 	apimeta.RemoveStatusCondition(conditions, "Progressing")
+	logConditionTransitions(log, req, kind, before, *conditions)
 }
 
 // patchReady marks a resource as Ready, emits a Normal event, and patches the
@@ -168,7 +266,7 @@ func patchReady(
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	setStatusReady(log, req, kind, conditions, generation, reason, message)
 	if err := statusWriter.Patch(ctx, obj, patch); err != nil {
-		logError(log, req, kind, err, "Failed to patch status")
+		logAPIError(log, req, kind, err, "Failed to patch status", obj)
 		return err
 	}
 	return nil
