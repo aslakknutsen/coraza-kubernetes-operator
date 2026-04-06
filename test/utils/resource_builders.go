@@ -21,8 +21,10 @@ package utils
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
 // -----------------------------------------------------------------------------
@@ -103,6 +105,7 @@ type EngineOptions struct {
 	Namespace            string
 	RuleSetName          string
 	WasmImage            string
+	ImagePullSecret      string
 	PollIntervalSeconds  int32
 	WorkloadLabels       map[string]string
 	IstioIntegrationMode wafv1alpha1.IstioIntegrationMode
@@ -121,7 +124,7 @@ func NewTestEngine(opts EngineOptions) *wafv1alpha1.Engine {
 		opts.RuleSetName = "test-ruleset"
 	}
 	if opts.WasmImage == "" {
-		opts.WasmImage = "oci://fake-registry.io/fake-image:latest"
+		opts.WasmImage = defaults.DefaultCorazaWasmOCIReference
 	}
 	if opts.PollIntervalSeconds == 0 {
 		opts.PollIntervalSeconds = 5
@@ -136,7 +139,7 @@ func NewTestEngine(opts EngineOptions) *wafv1alpha1.Engine {
 		opts.FailurePolicy = wafv1alpha1.FailurePolicyFail
 	}
 
-	return &wafv1alpha1.Engine{
+	engine := &wafv1alpha1.Engine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opts.Name,
 			Namespace: opts.Namespace,
@@ -148,7 +151,7 @@ func NewTestEngine(opts EngineOptions) *wafv1alpha1.Engine {
 			Driver: &wafv1alpha1.DriverConfig{
 				Istio: &wafv1alpha1.IstioDriverConfig{
 					Wasm: &wafv1alpha1.IstioWasmConfig{
-						Image: opts.WasmImage,
+						Image: ptr.To(opts.WasmImage),
 						WorkloadSelector: &metav1.LabelSelector{
 							MatchLabels: opts.WorkloadLabels,
 						},
@@ -162,4 +165,10 @@ func NewTestEngine(opts EngineOptions) *wafv1alpha1.Engine {
 			FailurePolicy: &opts.FailurePolicy,
 		},
 	}
+
+	if opts.ImagePullSecret != "" {
+		engine.Spec.Driver.Istio.Wasm.ImagePullSecret = new(opts.ImagePullSecret)
+	}
+
+	return engine
 }

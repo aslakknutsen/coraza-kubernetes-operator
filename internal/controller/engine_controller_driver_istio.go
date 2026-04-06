@@ -91,7 +91,13 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 // and applies it via server-side apply.
 func (r *EngineReconciler) applyWasmPlugin(ctx context.Context, log logr.Logger, req ctrl.Request, engine *wafv1alpha1.Engine) (*unstructured.Unstructured, error) {
 	logDebug(log, req, "Engine", "Building WasmPlugin resource")
-	wasmPlugin := r.buildWasmPlugin(engine)
+	wasmURL, fromSpec := r.wasmPluginOCIURLSource(engine)
+	if fromSpec {
+		logDebug(log, req, "Engine", "WasmPlugin OCI URL from Engine spec", "url", wasmURL)
+	} else {
+		logDebug(log, req, "Engine", "WasmPlugin OCI URL from operator default", "url", wasmURL)
+	}
+	wasmPlugin := r.buildWasmPlugin(engine, wasmURL)
 
 	logDebug(log, req, "Engine", "Setting controller reference on WasmPlugin")
 	if err := controllerutil.SetControllerReference(engine, wasmPlugin, r.Scheme); err != nil {
@@ -113,7 +119,18 @@ func (r *EngineReconciler) applyWasmPlugin(ctx context.Context, log logr.Logger,
 // Engine Controller - Istio Driver - WasmPlugin Builder
 // -----------------------------------------------------------------------------
 
-func (r *EngineReconciler) buildWasmPlugin(engine *wafv1alpha1.Engine) *unstructured.Unstructured {
+func (r *EngineReconciler) wasmPluginOCIURLSource(engine *wafv1alpha1.Engine) (url string, fromSpec bool) {
+	if engine.Spec.Driver == nil || engine.Spec.Driver.Istio == nil || engine.Spec.Driver.Istio.Wasm == nil {
+		return r.defaultWasmImage, false
+	}
+	w := engine.Spec.Driver.Istio.Wasm
+	if w.Image != nil && *w.Image != "" {
+		return *w.Image, true
+	}
+	return r.defaultWasmImage, false
+}
+
+func (r *EngineReconciler) buildWasmPlugin(engine *wafv1alpha1.Engine, wasmURL string) *unstructured.Unstructured {
 	rulesetKey := fmt.Sprintf("%s/%s", engine.Namespace, engine.Spec.RuleSet.Name)
 
 	failurePolicy := wafv1alpha1.FailurePolicyFail
@@ -145,13 +162,18 @@ func (r *EngineReconciler) buildWasmPlugin(engine *wafv1alpha1.Engine) *unstruct
 				"namespace": engine.Namespace,
 			},
 			"spec": map[string]any{
-				"url":          engine.Spec.Driver.Istio.Wasm.Image,
+				"url":          wasmURL,
 				"pluginConfig": pluginConfig,
 				"selector": map[string]any{
 					"matchLabels": matchLabels,
 				},
 			},
 		},
+	}
+
+	if engine.Spec.Driver.Istio.Wasm.ImagePullSecret != nil {
+		spec := wasmPlugin.Object["spec"].(map[string]any)
+		spec["imagePullSecret"] = *engine.Spec.Driver.Istio.Wasm.ImagePullSecret
 	}
 
 	wasmPlugin.SetGroupVersionKind(schema.GroupVersionKind{

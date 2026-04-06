@@ -66,6 +66,9 @@ type EngineReconciler struct {
 	client.Client
 	ruleSetCacheServerCluster string
 	istioRevision             string
+	// defaultWasmImage is the OCI URL used for Istio WasmPlugin spec.url when the
+	// Engine omits spec.driver.istio.wasm.image.
+	defaultWasmImage string
 }
 
 // SetupWithManager sets up the controller with the Manager.

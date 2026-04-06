@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 )
 
 // Resource builders, GVRs, and CRUD helpers for integration tests.
@@ -118,13 +119,11 @@ type EngineOpts struct {
 // Defaults
 // -----------------------------------------------------------------------------
 
-const fallbackWasmImage = "oci://ghcr.io/networking-incubator/coraza-proxy-wasm:1902646ac7391b65be092cdec9b47d29fa5724c7"
-
 func defaultWasmImage() string {
 	if img := os.Getenv("CORAZA_WASM_IMAGE"); img != "" {
 		return img
 	}
-	return fallbackWasmImage
+	return defaults.DefaultCorazaWasmOCIReference
 }
 
 const fallbackEchoImage = "registry.k8s.io/gateway-api/echo-basic:v20251204-v1.4.1"
@@ -164,32 +163,32 @@ func toUnstructured(obj runtime.Object) *unstructured.Unstructured {
 // If f.IstioGatewayRevision is non-empty, sets metadata.labels["istio.io/rev"] to
 // that value (from ISTIO_GATEWAY_REVISION when using framework.New).
 func (f *Framework) BuildGateway(namespace, name, gatewayClassName string) *unstructured.Unstructured {
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"name":      name,
 		"namespace": namespace,
-		"annotations": map[string]interface{}{
+		"annotations": map[string]any{
 			"networking.istio.io/service-type": "ClusterIP",
 		},
 	}
 	if f.IstioGatewayRevision != "" {
-		meta["labels"] = map[string]interface{}{
+		meta["labels"] = map[string]any{
 			"istio.io/rev": f.IstioGatewayRevision,
 		}
 	}
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "gateway.networking.k8s.io/v1",
 			"kind":       "Gateway",
 			"metadata":   meta,
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"gatewayClassName": gatewayClassName,
-				"listeners": []interface{}{
-					map[string]interface{}{
+				"listeners": []any{
+					map[string]any{
 						"name":     "http",
 						"port":     int64(80),
 						"protocol": "HTTP",
-						"allowedRoutes": map[string]interface{}{
-							"namespaces": map[string]interface{}{
+						"allowedRoutes": map[string]any{
+							"namespaces": map[string]any{
 								"from": "All",
 							},
 						},
@@ -278,7 +277,7 @@ func BuildEngine(namespace, name string, opts EngineOpts) *unstructured.Unstruct
 			Driver: &wafv1alpha1.DriverConfig{
 				Istio: &wafv1alpha1.IstioDriverConfig{
 					Wasm: &wafv1alpha1.IstioWasmConfig{
-						Image:            opts.WasmImage,
+						Image:            ptr.To(opts.WasmImage),
 						Mode:             ptr.To(wafv1alpha1.IstioIntegrationModeGateway),
 						WorkloadSelector: labelSelector,
 						RuleSetCacheServer: &wafv1alpha1.RuleSetCacheServerConfig{
@@ -296,23 +295,23 @@ func BuildEngine(namespace, name string, opts EngineOpts) *unstructured.Unstruct
 // from the named Gateway to the named backend Service on port 80.
 func BuildHTTPRoute(namespace, name, gatewayName, backendName string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "gateway.networking.k8s.io/v1",
 			"kind":       "HTTPRoute",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      name,
 				"namespace": namespace,
 			},
-			"spec": map[string]interface{}{
-				"parentRefs": []interface{}{
-					map[string]interface{}{
+			"spec": map[string]any{
+				"parentRefs": []any{
+					map[string]any{
 						"name": gatewayName,
 					},
 				},
-				"rules": []interface{}{
-					map[string]interface{}{
-						"backendRefs": []interface{}{
-							map[string]interface{}{
+				"rules": []any{
+					map[string]any{
+						"backendRefs": []any{
+							map[string]any{
 								"name": backendName,
 								"port": int64(80),
 							},
@@ -599,9 +598,9 @@ func (s *Scenario) UpdateRuleSet(namespace, name string, configMapNames []string
 	obj, err := s.F.DynamicClient.Resource(RuleSetGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	require.NoError(s.T, err, "get RuleSet %s/%s", namespace, name)
 
-	rules := make([]interface{}, len(configMapNames))
+	rules := make([]any, len(configMapNames))
 	for i, cm := range configMapNames {
-		rules[i] = map[string]interface{}{"name": cm}
+		rules[i] = map[string]any{"name": cm}
 	}
 	err = unstructured.SetNestedSlice(obj.Object, rules, "spec", "rules")
 	require.NoError(s.T, err, "set spec.rules on RuleSet %s/%s", namespace, name)

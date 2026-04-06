@@ -25,12 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/defaults"
 	"github.com/networking-incubator/coraza-kubernetes-operator/test/utils"
 )
 
@@ -44,6 +47,7 @@ func TestEngineReconciler_ReconcileNotFound(t *testing.T) {
 		Scheme:                    scheme,
 		Recorder:                  utils.NewTestRecorder(),
 		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
 	}
 
 	t.Log("Reconciling non-existent engine - should not error")
@@ -64,17 +68,18 @@ func TestEngineReconciler_BuildWasmPlugin_IstioRevisionLabel(t *testing.T) {
 		Namespace: testNamespace,
 	})
 
+	const testWasmOCI = "oci://test.example/wasm:latest"
 	withRev := &EngineReconciler{
 		ruleSetCacheServerCluster: "test-cluster",
 		istioRevision:             "canary",
 	}
-	w := withRev.buildWasmPlugin(engine)
+	w := withRev.buildWasmPlugin(engine, testWasmOCI)
 	assert.Equal(t, "canary", w.GetLabels()["istio.io/rev"])
 
 	noRev := &EngineReconciler{
 		ruleSetCacheServerCluster: "test-cluster",
 	}
-	w2 := noRev.buildWasmPlugin(engine)
+	w2 := noRev.buildWasmPlugin(engine, testWasmOCI)
 	_, has := w2.GetLabels()["istio.io/rev"]
 	assert.False(t, has, "istio.io/rev should not be set when revision is empty")
 }
@@ -102,6 +107,7 @@ func TestEngineReconciler_ReconcileMissingRuleSet(t *testing.T) {
 		Scheme:                    scheme,
 		Recorder:                  utils.NewTestRecorder(),
 		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
 	}
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -152,6 +158,7 @@ func TestEngineReconciler_ReconcileIstioDriver(t *testing.T) {
 		Scheme:                    scheme,
 		Recorder:                  recorder,
 		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
 	}
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -200,6 +207,7 @@ func TestEngineReconciler_StatusUpdateHandling(t *testing.T) {
 		Scheme:                    scheme,
 		Recorder:                  utils.NewTestRecorder(),
 		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
 	}
 	_, err := reconciler.Reconcile(ctx, ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -279,6 +287,7 @@ func TestEngineReconciler_FailurePolicyInWasmPluginConfig(t *testing.T) {
 				Scheme:                    scheme,
 				Recorder:                  utils.NewTestRecorder(),
 				ruleSetCacheServerCluster: "test-cluster",
+				defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
 			}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{
@@ -290,7 +299,8 @@ func TestEngineReconciler_FailurePolicyInWasmPluginConfig(t *testing.T) {
 			assert.False(t, result.Requeue)
 
 			t.Log("Fetching created WasmPlugin")
-			wasmPlugin := reconciler.buildWasmPlugin(engine)
+			wasmURL, _ := reconciler.wasmPluginOCIURLSource(engine)
+			wasmPlugin := reconciler.buildWasmPlugin(engine, wasmURL)
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      wasmPlugin.GetName(),
 				Namespace: wasmPlugin.GetNamespace(),
@@ -340,6 +350,162 @@ func getNestedString(obj map[string]any, key string) (string, bool, error) {
 	return strVal, true, nil
 }
 
+func TestEngineReconciler_ImagePullSecretInWasmPlugin(t *testing.T) {
+	reconciler := &EngineReconciler{
+		Client:                    k8sClient,
+		Scheme:                    scheme,
+		Recorder:                  utils.NewTestRecorder(),
+		ruleSetCacheServerCluster: "test-cluster",
+	}
+
+	t.Run("imagePullSecret is set when specified", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{
+			Name:            "engine-with-pull-secret",
+			Namespace:       testNamespace,
+			ImagePullSecret: "my-registry-secret",
+		})
+
+		wasmPlugin := reconciler.buildWasmPlugin(engine, "")
+
+		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found)
+
+		secret, found, err := getNestedString(spec, "imagePullSecret")
+		require.NoError(t, err)
+		require.True(t, found, "imagePullSecret should be present in WasmPlugin spec")
+		assert.Equal(t, "my-registry-secret", secret)
+	})
+
+	t.Run("imagePullSecret is omitted when empty", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{
+			Name:      "engine-without-pull-secret",
+			Namespace: testNamespace,
+		})
+
+		wasmPlugin := reconciler.buildWasmPlugin(engine, "")
+
+		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found)
+
+		_, found = spec["imagePullSecret"]
+		assert.False(t, found, "imagePullSecret should not be present in WasmPlugin spec when empty")
+	})
+}
+
+func TestEngineReconciler_ImagePullSecretEnvtest(t *testing.T) {
+	ctx := context.Background()
+
+	t.Log("Creating RuleSet for imagePullSecret envtest")
+	ruleset := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "pull-secret-ruleset",
+		Namespace: testNamespace,
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleset))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleset); err != nil {
+			t.Logf("Failed to delete ruleset: %v", err)
+		}
+	})
+
+	reconciler := &EngineReconciler{
+		Client:                    k8sClient,
+		Scheme:                    scheme,
+		Recorder:                  utils.NewTestRecorder(),
+		ruleSetCacheServerCluster: "test-cluster",
+	}
+
+	t.Run("imagePullSecret persisted in WasmPlugin via server-side apply", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{
+			Name:            "engine-pullsecret-envtest",
+			Namespace:       testNamespace,
+			RuleSetName:     ruleset.Name,
+			ImagePullSecret: "my-registry-secret",
+		})
+		require.NoError(t, k8sClient.Create(ctx, engine))
+		t.Cleanup(func() {
+			if err := k8sClient.Delete(ctx, engine); err != nil {
+				t.Logf("Failed to delete engine: %v", err)
+			}
+		})
+
+		result, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      engine.Name,
+				Namespace: engine.Namespace,
+			},
+		})
+		require.NoError(t, err)
+		assert.False(t, result.Requeue)
+
+		t.Log("Fetching WasmPlugin from API server")
+		wasmPlugin := &unstructured.Unstructured{}
+		wasmPlugin.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "extensions.istio.io",
+			Version: "v1alpha1",
+			Kind:    "WasmPlugin",
+		})
+		err = k8sClient.Get(ctx, types.NamespacedName{
+			Name:      fmt.Sprintf("%s%s", WasmPluginNamePrefix, engine.Name),
+			Namespace: engine.Namespace,
+		}, wasmPlugin)
+		require.NoError(t, err)
+
+		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found, "spec not found in WasmPlugin")
+
+		secret, found, err := getNestedString(spec, "imagePullSecret")
+		require.NoError(t, err)
+		require.True(t, found, "imagePullSecret should be persisted in WasmPlugin spec after server-side apply")
+		assert.Equal(t, "my-registry-secret", secret)
+	})
+
+	t.Run("imagePullSecret omitted in WasmPlugin when not set", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{
+			Name:        "engine-no-pullsecret-envtest",
+			Namespace:   testNamespace,
+			RuleSetName: ruleset.Name,
+		})
+		require.NoError(t, k8sClient.Create(ctx, engine))
+		t.Cleanup(func() {
+			if err := k8sClient.Delete(ctx, engine); err != nil {
+				t.Logf("Failed to delete engine: %v", err)
+			}
+		})
+
+		result, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      engine.Name,
+				Namespace: engine.Namespace,
+			},
+		})
+		require.NoError(t, err)
+		assert.False(t, result.Requeue)
+
+		t.Log("Fetching WasmPlugin from API server")
+		wasmPlugin := &unstructured.Unstructured{}
+		wasmPlugin.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "extensions.istio.io",
+			Version: "v1alpha1",
+			Kind:    "WasmPlugin",
+		})
+		err = k8sClient.Get(ctx, types.NamespacedName{
+			Name:      fmt.Sprintf("%s%s", WasmPluginNamePrefix, engine.Name),
+			Namespace: engine.Namespace,
+		}, wasmPlugin)
+		require.NoError(t, err)
+
+		spec, found, err := getNestedMap(wasmPlugin.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found, "spec not found in WasmPlugin")
+
+		_, found = spec["imagePullSecret"]
+		assert.False(t, found, "imagePullSecret should not be present in WasmPlugin spec when not set")
+	})
+}
+
 func TestEngineReconciler_ValidationRejection(t *testing.T) {
 	ctx := context.Background()
 
@@ -381,28 +547,19 @@ func TestEngineReconciler_ValidationRejection(t *testing.T) {
 			name: "image doesn't start with oci://",
 			engineFunc: func() *wafv1alpha1.Engine {
 				engine := utils.NewTestEngine(utils.EngineOptions{})
-				engine.Spec.Driver.Istio.Wasm.Image = "docker://invalid-image"
+				engine.Spec.Driver.Istio.Wasm.Image = ptr.To("docker://invalid-image")
 				return engine
 			},
-			expectedError: "spec.driver.istio.wasm.image in body should match '^oci://'",
-		},
-		{
-			name: "image too short",
-			engineFunc: func() *wafv1alpha1.Engine {
-				engine := utils.NewTestEngine(utils.EngineOptions{})
-				engine.Spec.Driver.Istio.Wasm.Image = ""
-				return engine
-			},
-			expectedError: "spec.driver.istio.wasm.image: Required value",
+			expectedError: "image must start with oci:// when set",
 		},
 		{
 			name: "image too long",
 			engineFunc: func() *wafv1alpha1.Engine {
 				engine := utils.NewTestEngine(utils.EngineOptions{})
-				engine.Spec.Driver.Istio.Wasm.Image = "oci://" + string(make([]byte, 1100))
+				engine.Spec.Driver.Istio.Wasm.Image = ptr.To("oci://" + string(make([]byte, 1100)))
 				return engine
 			},
-			expectedError: "spec.driver.istio.wasm.image: Too long",
+			expectedError: fmt.Sprintf("image must be at most %d characters when set", wafv1alpha1.MaxImageLen),
 		},
 		{
 			name: "gateway mode without workloadSelector",
@@ -486,6 +643,7 @@ func TestEngineReconciler_DegradedWhenRuleSetDegraded(t *testing.T) {
 		Scheme:                    scheme,
 		Recorder:                  recorder,
 		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          "oci://test.example/wasm:latest",
 	}
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -516,4 +674,65 @@ func TestEngineReconciler_DegradedWhenRuleSetDegraded(t *testing.T) {
 
 	assert.True(t, recorder.HasEvent("Warning", "RuleSetDegraded"),
 		"expected Warning/RuleSetDegraded event; got: %v", recorder.Events)
+}
+
+func TestEngineReconciler_ValidationAllowsOmittedWasmImage(t *testing.T) {
+	ctx := context.Background()
+
+	engine := utils.NewTestEngine(utils.EngineOptions{
+		Name:      "omit-wasm-image",
+		Namespace: testNamespace,
+	})
+	engine.Spec.Driver.Istio.Wasm.Image = nil
+
+	err := k8sClient.Create(ctx, engine)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, engine); err != nil {
+			t.Logf("Failed to delete engine: %v", err)
+		}
+	})
+}
+
+func TestEngineReconciler_BuildWasmPlugin_WasmImageResolution(t *testing.T) {
+	const operatorDefault = "oci://operator-default.example/wasm@digest"
+
+	t.Run("nil image uses operator default", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{})
+		engine.Spec.Driver.Istio.Wasm.Image = nil
+		r := &EngineReconciler{defaultWasmImage: operatorDefault}
+		wasmURL, _ := r.wasmPluginOCIURLSource(engine)
+		wp := r.buildWasmPlugin(engine, wasmURL)
+		spec, found, err := getNestedMap(wp.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found)
+		url, found, err := getNestedString(spec, "url")
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, operatorDefault, url)
+	})
+
+	t.Run("nil wasm uses operator default", func(t *testing.T) {
+		engine := utils.NewTestEngine(utils.EngineOptions{})
+		engine.Spec.Driver.Istio.Wasm = nil
+		r := &EngineReconciler{defaultWasmImage: operatorDefault}
+		wasmURL, _ := r.wasmPluginOCIURLSource(engine)
+		assert.Equal(t, operatorDefault, wasmURL)
+	})
+
+	t.Run("explicit image wins over operator default", func(t *testing.T) {
+		custom := "oci://custom.example/wasm:v2"
+		engine := utils.NewTestEngine(utils.EngineOptions{})
+		engine.Spec.Driver.Istio.Wasm.Image = ptr.To(custom)
+		r := &EngineReconciler{defaultWasmImage: operatorDefault}
+		wasmURL, _ := r.wasmPluginOCIURLSource(engine)
+		wp := r.buildWasmPlugin(engine, wasmURL)
+		spec, found, err := getNestedMap(wp.Object, "spec")
+		require.NoError(t, err)
+		require.True(t, found)
+		url, found, err := getNestedString(spec, "url")
+		require.NoError(t, err)
+		require.True(t, found)
+		assert.Equal(t, custom, url)
+	})
 }

@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -44,7 +44,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -68,13 +68,15 @@ jobs:
       - name: set up python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.x"
+          python-version: "3.13.12"
       - name: install python dependencies
-        run: pip install PyYAML
+        run: pip install PyYAML==6.0.3
       - name: set up helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: "v4.1.3"
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -97,9 +99,11 @@ jobs:
       - name: set up python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.x"
+          python-version: "3.13.12"
       - name: set up helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: "v4.1.3"
       - name: set up chart-testing
         uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
       - name: run chart-testing (lint)
@@ -116,7 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -125,7 +129,7 @@ jobs:
         run: make test.coverage
 
       - name: upload coverage to codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
           files: ./coverage.out
           flags: unittests
@@ -149,7 +153,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "tools/github_project_manager/go.mod"
           cache: false
@@ -168,7 +172,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -176,16 +180,16 @@ jobs:
       - name: install kubectl
         uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b # v5.0.0
         with:
-          version: "latest"
+          version: "v1.35.3"
 
       - name: install helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
-          version: "latest"
+          version: "v4.1.3"
 
       - name: install kind
         run: go install sigs.k8s.io/kind@a323333ff9efd8099f95a8a6b5c86c75a210d00f # v0.31.0
-      
+
       - name: setup environment
         run: make cluster.kind
         env:
@@ -210,7 +214,7 @@ jobs:
           persist-credentials: false
 
       - name: set up go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: "go.mod"
           cache: false
@@ -218,20 +222,20 @@ jobs:
       - name: set up python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.x"
+          python-version: "3.13.12"
 
       - name: install python dependencies
-        run: pip install PyYAML
+        run: pip install PyYAML==6.0.3
 
       - name: install kubectl
         uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b # v5.0.0
         with:
-          version: "latest"
+          version: "v1.35.3"
 
       - name: install helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
-          version: "latest"
+          version: "v4.1.3"
 
       - name: install kind
         run: go install sigs.k8s.io/kind@a323333ff9efd8099f95a8a6b5c86c75a210d00f # v0.31.0
