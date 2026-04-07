@@ -33,8 +33,9 @@ func init() {
 // -----------------------------------------------------------------------------
 
 const (
-	// AnnotationSkipValidation disables per-fragment Coraza rule validation
-	// when set to "false" on a RuleSource of type Rule.
+	// AnnotationSkipValidation controls per-fragment Coraza rule validation on
+	// a RuleSource of type Rule. When set to "false", per-source validation is
+	// skipped (the aggregated RuleSet validation still runs).
 	AnnotationSkipValidation = "coraza.io/validation"
 )
 
@@ -67,6 +68,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.spec.type == 'Rule' ? !has(self.spec.files) || size(self.spec.files) == 0 : true",message="files must not be set when type is Rule"
 // +kubebuilder:validation:XValidation:rule="self.spec.type == 'Data' ? has(self.spec.files) && size(self.spec.files) > 0 : true",message="files must be non-empty when type is Data"
 // +kubebuilder:validation:XValidation:rule="self.spec.type == 'Data' ? !has(self.spec.rules) || self.spec.rules == '' : true",message="rules must not be set when type is Data"
+// +kubebuilder:validation:XValidation:rule="self.spec.type == 'Data' && has(self.spec.files) ? self.spec.files.all(k, k.matches('^[-._a-zA-Z0-9]+$') && size(k) <= 253) : true",message="files keys must be valid data file names (alphanumeric, '-', '_', '.'; max 253 chars)"
 type RuleSource struct {
 	metav1.TypeMeta `json:",inline"`
 

@@ -81,6 +81,14 @@ func (r *RuleSetReconciler) loadSources(
 		}
 	}
 
+	if len(ruleFragments) == 0 {
+		msg := "RuleSet must reference at least one RuleSource of type Rule"
+		if patchErr := patchDegraded(ctx, r.Status(), r.Recorder, log, req, "RuleSet", ruleset, &ruleset.Status.Conditions, ruleset.Generation, "NoRuleSources", msg); patchErr != nil {
+			return nil, "", nil, true, patchErr
+		}
+		return nil, "", nil, true, nil
+	}
+
 	var dataMap map[string][]byte
 	if len(dataFiles) > 0 {
 		dataMap = dataFiles

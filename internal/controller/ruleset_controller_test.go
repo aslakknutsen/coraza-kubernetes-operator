@@ -330,6 +330,62 @@ func TestRuleSetReconciler_UpdateCache(t *testing.T) {
 	assert.NotEqual(t, uuid1, entry2.UUID, "UUID should change when rules are updated")
 }
 
+func TestRuleSetReconciler_DataOnlyRuleSetRejected(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	dataSrc := utils.NewTestRuleSourceData("data-only-src", testNamespace, map[string]string{
+		"test.data": "some-content",
+	})
+	require.NoError(t, k8sClient.Create(ctx, dataSrc))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, dataSrc); err != nil {
+			t.Logf("failed to delete %s: %v", dataSrc.Name, err)
+		}
+	})
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "data-only-ruleset",
+		Namespace: testNamespace,
+		Sources: []wafv1alpha1.SourceReference{
+			{Name: "data-only-src"},
+		},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleSet); err != nil {
+			t.Logf("failed to delete RuleSet: %v", err)
+		}
+	})
+
+	recorder := utils.NewFakeRecorder()
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: recorder,
+		Cache:    ruleSetCache,
+	}
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, result)
+
+	cacheKey := testNamespace + "/data-only-ruleset"
+	_, ok := ruleSetCache.Get(cacheKey)
+	assert.False(t, ok, "cache should be empty for data-only RuleSet")
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace}, ruleSet))
+	ready := apimeta.FindStatusCondition(ruleSet.Status.Conditions, "Ready")
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionFalse, ready.Status)
+	assert.Equal(t, "NoRuleSources", ready.Reason)
+	assert.Contains(t, ready.Message, "at least one RuleSource of type Rule")
+
+	assert.True(t, recorder.HasEvent("Warning", "NoRuleSources"),
+		"expected Warning/NoRuleSources event; got: %v", recorder.Events)
+}
+
 func TestRuleSetReconciler_DataSourcesDuplicateFileKeysLastListedWins(t *testing.T) {
 	ctx := context.Background()
 	ruleSetCache := cache.NewRuleSetCache()
