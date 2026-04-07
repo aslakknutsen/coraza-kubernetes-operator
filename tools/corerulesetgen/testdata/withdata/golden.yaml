@@ -99,7 +99,7 @@ spec:
   type: Data
   files:
     foo.data: |
-      hello
+    hello
     
 ---
 apiVersion: waf.k8s.coraza.io/v1alpha1
@@ -111,3 +111,4 @@ spec:
     - name: coreruleset-data
     - name: base-rules
     - name: rules
+

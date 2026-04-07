@@ -330,6 +330,65 @@ func TestRuleSetReconciler_UpdateCache(t *testing.T) {
 	assert.NotEqual(t, uuid1, entry2.UUID, "UUID should change when rules are updated")
 }
 
+func TestRuleSetReconciler_DataSourcesDuplicateFileKeysLastListedWins(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	dataFirst := utils.NewTestRuleSourceData("dup-data-first", testNamespace, map[string]string{
+		"overlap.data": "alpha",
+	})
+	dataSecond := utils.NewTestRuleSourceData("dup-data-second", testNamespace, map[string]string{
+		"overlap.data": "bravo",
+	})
+	ruleSrc := utils.NewTestRuleSource("dup-rule", testNamespace,
+		`SecRule ARGS "@pmFromFile overlap.data" "id:77777,phase:1,pass,nolog"`,
+	)
+
+	for _, obj := range []*wafv1alpha1.RuleSource{dataFirst, dataSecond, ruleSrc} {
+		rs := obj
+		require.NoError(t, k8sClient.Create(ctx, rs))
+		t.Cleanup(func() {
+			if err := k8sClient.Delete(ctx, rs); err != nil {
+				t.Logf("failed to delete %s: %v", rs.Name, err)
+			}
+		})
+	}
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "dup-key-ruleset",
+		Namespace: testNamespace,
+		Sources: []wafv1alpha1.SourceReference{
+			{Name: "dup-data-first"},
+			{Name: "dup-data-second"},
+			{Name: "dup-rule"},
+		},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleSet); err != nil {
+			t.Logf("failed to delete RuleSet: %v", err)
+		}
+	})
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	cacheKey := testNamespace + "/dup-key-ruleset"
+	entry, ok := ruleSetCache.Get(cacheKey)
+	require.True(t, ok)
+	require.Contains(t, entry.DataFiles, "overlap.data")
+	assert.Equal(t, []byte("bravo"), entry.DataFiles["overlap.data"],
+		"later-listed Data RuleSource should overwrite the same files map key")
+}
+
 func TestRuleSetReconciler_ValidateRules(t *testing.T) {
 	ctx := context.Background()
 
