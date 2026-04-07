@@ -86,6 +86,10 @@ spec:
         - message: rules must not be set when type is Data
           rule: 'self.spec.type == ''Data'' ? !has(self.spec.rules) || self.spec.rules
             == '''' : true'
+        - message: files keys must be valid data file names (alphanumeric, '-', '_',
+            '.'; max 253 chars)
+          rule: 'self.spec.type == ''Data'' && has(self.spec.files) ? self.spec.files.all(k,
+            k.matches(''^[-._a-zA-Z0-9]+$'') && size(k) <= 253) : true'
     served: true
     storage: true
     subresources: {}
