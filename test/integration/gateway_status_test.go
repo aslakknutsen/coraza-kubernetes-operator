@@ -41,7 +41,7 @@ func TestEngineGatewayStatus(t *testing.T) {
 		ns := s.GenerateNamespace("gw-status-0")
 
 		s.Step("create rules and engine targeting non-existent gateway")
-		s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On`)
+		s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On`)
 		s.CreateRuleSet(ns, "ruleset", []string{"base-rules"})
 		s.CreateEngine(ns, "engine", framework.EngineOpts{
 			RuleSetName: "ruleset",
@@ -64,8 +64,8 @@ func TestEngineGatewayStatus(t *testing.T) {
 		ns := s.GenerateNamespace("gw-status-1")
 
 		s.Step("create rules")
-		s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On`)
-		s.CreateConfigMap(ns, "block-rules",
+		s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On`)
+		s.CreateRuleSource(ns, "block-rules",
 			framework.SimpleBlockRule(4001, "blocked"),
 		)
 		s.CreateRuleSet(ns, "ruleset", []string{"base-rules", "block-rules"})
@@ -103,8 +103,8 @@ func TestEngineGatewayStatus(t *testing.T) {
 		gwCount := 3
 
 		s.Step("create rules")
-		s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On`)
-		s.CreateConfigMap(ns, "block-rules",
+		s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On`)
+		s.CreateRuleSource(ns, "block-rules",
 			framework.SimpleBlockRule(4002, "blocked"),
 		)
 		s.CreateRuleSet(ns, "ruleset", []string{"base-rules", "block-rules"})
