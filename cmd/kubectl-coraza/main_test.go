@@ -40,8 +40,7 @@ func TestGenCRS_minimalFixture(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, stdout.String())
 
-	// Output should contain a RuleSet and ConfigMap documents.
-	assert.Contains(t, stdout.String(), "kind: ConfigMap")
+	assert.Contains(t, stdout.String(), "kind: RuleSource")
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
 
@@ -53,7 +52,6 @@ func TestGenCRS_ignoreRules(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// The rule ID 100 from simple.conf should be dropped from the output.
 	assert.NotContains(t, stdout.String(), "id:100,")
 }
 
@@ -65,8 +63,6 @@ func TestGenCRS_ignoreRulesMultiple(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Both IDs should be absent from the generated output.
-	// Rule ID 100 exists in the fixture; 200 does not but the CSV is still parsed.
 	assert.NotContains(t, stdout.String(), "id:100,")
 }
 
@@ -78,7 +74,6 @@ func TestGenCRS_ignoreRulesEmpty(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Empty CSV should not print the ignoring message.
 	assert.NotContains(t, stderr.String(), "Ignoring rule IDs")
 }
 
@@ -90,7 +85,6 @@ func TestGenCRS_dryRun(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Dry-run still writes manifests to stdout.
 	assert.NotEmpty(t, stdout.String())
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
@@ -103,7 +97,6 @@ func TestGenCRS_dryRunCaseInsensitive(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// Case-insensitive "CLIENT" should also produce valid output.
 	assert.NotEmpty(t, stdout.String())
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
@@ -126,7 +119,6 @@ func TestGenCRS_customRulesetName(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	// The RuleSet document should contain the custom name in its metadata.
 	output := stdout.String()
 	assert.Contains(t, output, "name: my-ruleset")
 	assert.Contains(t, output, "kind: RuleSet")
@@ -159,10 +151,10 @@ func TestGenCRS_invalidRulesetName(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// genCRS Tests — Data Secret
+// genCRS Tests — Data RuleSource
 // -----------------------------------------------------------------------------
 
-func TestGenCRS_withDataSecret(t *testing.T) {
+func TestGenCRS_withDataSource(t *testing.T) {
 	dir := testdataDir(t, "withdata")
 	cmd, stdout, _ := newTestCommand(t)
 	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.0.0"})
@@ -170,7 +162,7 @@ func TestGenCRS_withDataSecret(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, stdout.String(), "kind: Secret")
+	assert.Contains(t, stdout.String(), "type: Data")
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
 
@@ -196,7 +188,6 @@ func TestGenCRS_versionWithPrefix(t *testing.T) {
 // Test Helpers
 // -----------------------------------------------------------------------------
 
-// testdataDir returns the path to the shared corerulesetgen testdata fixtures.
 func testdataDir(t *testing.T, fixture string) string {
 	t.Helper()
 	dir := filepath.Join("..", "..", "tools", "corerulesetgen", "testdata", fixture, "rules")
@@ -205,8 +196,6 @@ func testdataDir(t *testing.T, fixture string) string {
 	return dir
 }
 
-// newTestCommand builds a fresh cobra command tree identical to the real one,
-// with stdout/stderr captured for assertions.
 func newTestCommand(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	root := &cobra.Command{
@@ -232,7 +221,7 @@ func newTestCommand(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer)
 	flags.Bool("include-test-rule", false, "")
 	flags.String("ruleset-name", "default-ruleset", "")
 	flags.StringP("namespace", "n", "", "")
-	flags.String("data-secret-name", "coreruleset-data", "")
+	flags.String("data-source-name", "coreruleset-data", "")
 	flags.String("name-prefix", "", "")
 	flags.String("name-suffix", "", "")
 	flags.String("dry-run", "", "")

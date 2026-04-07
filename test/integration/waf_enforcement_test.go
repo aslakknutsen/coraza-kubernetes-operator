@@ -55,8 +55,8 @@ func TestBlockByStatusCode(t *testing.T) {
 			s.ExpectGatewayProgrammed(ns, "gw")
 
 			s.Step("deploy rules with custom status code")
-			s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On`)
-			s.CreateConfigMap(ns, "status-rules", fmt.Sprintf(
+			s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On`)
+			s.CreateRuleSource(ns, "status-rules", fmt.Sprintf(
 				`SecRule ARGS|REQUEST_URI "@contains %s" "id:%d,phase:2,deny,status:%d,msg:'Custom status'"`,
 				tc.target, tc.ruleID, tc.statusCode,
 			))
@@ -130,13 +130,13 @@ func TestRequestBodyInspection(t *testing.T) {
 	s.ExpectGatewayProgrammed(ns, "gw")
 
 	s.Step("deploy rules for body inspection")
-	s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On
+	s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On
 SecDebugLogLevel 9
 SecDebugLog /dev/stdout
 SecRequestBodyAccess On
 SecRequestBodyLimit 13107200
 SecRequestBodyNoFilesLimit 131072`)
-	s.CreateConfigMap(ns, "body-rules", `
+	s.CreateRuleSource(ns, "body-rules", `
 SecRule REQUEST_BODY "@contains DROP TABLE" "id:6001,phase:2,pass,msg:'SQL injection in body',log,auditlog"
 SecRule REQUEST_BODY "@contains <script>" "id:6002,phase:2,pass,msg:'XSS in body',log,auditlog"
 SecRule REQUEST_BODY "@contains malicious_payload" "id:6003,phase:2,pass,msg:'Malicious payload',log,auditlog"
@@ -182,10 +182,10 @@ func TestRequestHeaderInspection(t *testing.T) {
 	s.ExpectGatewayProgrammed(ns, "gw")
 
 	s.Step("deploy rules for header inspection")
-	s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On
+	s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On
 SecDebugLogLevel 9
 SecDebugLog /dev/stdout`)
-	s.CreateConfigMap(ns, "header-rules", `
+	s.CreateRuleSource(ns, "header-rules", `
 SecRule REQUEST_HEADERS:User-Agent "@contains sqlmap" "id:7001,phase:1,deny,status:403,msg:'SQLMap detected',log,auditlog"
 SecRule REQUEST_HEADERS:User-Agent "@contains nikto" "id:7002,phase:1,deny,status:403,msg:'Nikto scanner detected',log,auditlog"
 SecRule REQUEST_HEADERS:Cookie "@contains <script>" "id:7003,phase:1,deny,status:403,msg:'XSS in cookie',log,auditlog"

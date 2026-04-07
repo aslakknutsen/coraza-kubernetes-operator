@@ -40,8 +40,8 @@ func TestReconciliation(t *testing.T) {
 	s.ExpectGatewayProgrammed(ns, "reconcile-gw")
 
 	s.Step("deploy initial rules")
-	s.CreateConfigMap(ns, "base-rules", `SecRuleEngine On`)
-	s.CreateConfigMap(ns, "block-evil",
+	s.CreateRuleSource(ns, "base-rules", `SecRuleEngine On`)
+	s.CreateRuleSource(ns, "block-evil",
 		framework.SimpleBlockRule(3001, "evilmonkey"),
 	)
 	s.CreateRuleSet(ns, "ruleset", []string{"base-rules", "block-evil"})
@@ -72,7 +72,7 @@ func TestReconciliation(t *testing.T) {
 	// --- RuleSet mutation: add a new ConfigMap ref ---
 
 	s.Step("add sinistermonkey rule to ruleset")
-	s.CreateConfigMap(ns, "block-sinister",
+	s.CreateRuleSource(ns, "block-sinister",
 		framework.SimpleBlockRule(3002, "sinistermonkey"),
 	)
 	s.UpdateRuleSet(ns, "ruleset", []string{"base-rules", "block-evil", "block-sinister"})
@@ -82,7 +82,7 @@ func TestReconciliation(t *testing.T) {
 	// --- ConfigMap content update: replace rule in-place ---
 
 	s.Step("replace sinistermonkey rule with maniacalmonkey")
-	s.UpdateConfigMap(ns, "block-sinister",
+	s.UpdateRuleSource(ns, "block-sinister",
 		framework.SimpleBlockRule(3002, "maniacalmonkey"),
 	)
 
@@ -92,7 +92,7 @@ func TestReconciliation(t *testing.T) {
 	// --- ConfigMap content update: replace with garbage
 
 	s.Step("replace rules with garbage")
-	s.UpdateConfigMap(ns, "block-sinister", "SecDoesNotExist")
+	s.UpdateRuleSource(ns, "block-sinister", "SecDoesNotExist")
 
 	s.ExpectRuleSetDegraded(ns, "ruleset")
 

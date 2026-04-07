@@ -202,17 +202,17 @@ func processFileContent(path string, ignoreIDs map[string]struct{}, ignorePM boo
 	return strings.Join(filtered, "\n"), warns, nil
 }
 
-func buildConfigMapYAML(path string, opts Options) (name, yamlOut, skipReason string, warns []string, err error) {
+func buildRuleSourceYAML(path string, opts Options) (name, yamlOut, skipReason string, warns []string, err error) {
 	base := filepath.Base(path)
-	rawName, err := generateConfigMapName(base)
+	rawName, err := generateRuleSourceName(base)
 	if err != nil {
 		return "", "", err.Error(), nil, err
 	}
 	name = opts.NamePrefix + rawName + opts.NameSuffix
 	if name == "" {
-		return "", "", "invalid empty ConfigMap name", nil, fmt.Errorf("empty ConfigMap name after prefix/suffix")
+		return "", "", "invalid empty RuleSource name", nil, fmt.Errorf("empty RuleSource name after prefix/suffix")
 	}
-	if err := validateConfigMapObjectName(name); err != nil {
+	if err := validateRuleSourceObjectName(name); err != nil {
 		return "", "", err.Error(), nil, err
 	}
 
@@ -230,6 +230,6 @@ func buildConfigMapYAML(path string, opts Options) (name, yamlOut, skipReason st
 	if err := checkPayloadSize(payload, name, opts); err != nil {
 		return "", "", "", warns, err
 	}
-	yamlOut = formatConfigMapYAML(name, opts.Namespace, indented)
+	yamlOut = formatRuleSourceYAML(name, opts.Namespace, indented)
 	return name, yamlOut, "", warns, nil
 }
