@@ -25,7 +25,7 @@ import (
 )
 
 // TestReconciliation validates that the operator's reconciliation loop
-// reacts to live resource changes (RuleSet mutations, ConfigMap content
+// reacts to live resource changes (RuleSet mutations, RuleSource content
 // updates) and propagates them to the WAF.
 func TestReconciliation(t *testing.T) {
 	t.Parallel()
@@ -69,7 +69,7 @@ func TestReconciliation(t *testing.T) {
 	gw.ExpectBlocked("/?test=evilmonkey")
 	gw.ExpectAllowed("/?test=safe")
 
-	// --- RuleSet mutation: add a new ConfigMap ref ---
+	// --- RuleSet mutation: add a new RuleSource ref ---
 
 	s.Step("add sinistermonkey rule to ruleset")
 	s.CreateRuleSource(ns, "block-sinister",
@@ -79,7 +79,7 @@ func TestReconciliation(t *testing.T) {
 
 	gw.ExpectBlocked("/sinistermonkey")
 
-	// --- ConfigMap content update: replace rule in-place ---
+	// --- RuleSource content update: replace rule in-place ---
 
 	s.Step("replace sinistermonkey rule with maniacalmonkey")
 	s.UpdateRuleSource(ns, "block-sinister",
@@ -89,7 +89,7 @@ func TestReconciliation(t *testing.T) {
 	gw.ExpectAllowed("/sinistermonkey")
 	gw.ExpectBlocked("/maniacalmonkey")
 
-	// --- ConfigMap content update: replace with garbage
+	// --- RuleSource content update: replace with garbage
 
 	s.Step("replace rules with garbage")
 	s.UpdateRuleSource(ns, "block-sinister", "SecDoesNotExist")

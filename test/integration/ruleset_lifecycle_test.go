@@ -134,13 +134,13 @@ func TestEngineDeleteRecreate(t *testing.T) {
 	gw.ExpectAllowed("/?test=firstblock") // Old rule should no longer block
 }
 
-// TestConfigMapDeletion verifies that deleting a ConfigMap referenced by a RuleSet
+// TestRuleSourceDeletion verifies that deleting a RuleSource referenced by a RuleSet
 // causes the RuleSet to become degraded, but cached rules continue to apply.
-func TestConfigMapDeletion(t *testing.T) {
+func TestRuleSourceDeletion(t *testing.T) {
 	t.Parallel()
 	s := fw.NewScenario(t)
 
-	ns := s.GenerateNamespace("cm-delete")
+	ns := s.GenerateNamespace("rs-delete")
 
 	s.Step("create gateway")
 	s.CreateGateway(ns, "gw")
@@ -166,21 +166,20 @@ func TestConfigMapDeletion(t *testing.T) {
 	gw := s.ProxyToGateway(ns, "gw")
 	gw.ExpectBlocked("/?test=blocked")
 
-	s.Step("delete ConfigMap")
-	err := s.F.KubeClient.CoreV1().ConfigMaps(ns).Delete(
+	s.Step("delete RuleSource")
+	err := s.F.DynamicClient.Resource(framework.RuleSourceGVR).Namespace(ns).Delete(
 		context.Background(), "block-rules", metav1.DeleteOptions{},
 	)
 	if err != nil {
-		t.Fatalf("failed to delete configmap: %v", err)
+		t.Fatalf("failed to delete rulesource: %v", err)
 	}
 
 	s.Step("verify cached rules still apply")
-	// Cached rules should continue working
 	gw.ExpectBlocked("/?test=blocked")
 	gw.ExpectAllowed("/?test=safe")
 }
 
-// TestRuleSetOrderMatters verifies that ConfigMaps in a RuleSet are processed
+// TestRuleSetOrderMatters verifies that RuleSources in a RuleSet are processed
 // in order, and rule precedence is maintained.
 func TestRuleSetOrderMatters(t *testing.T) {
 	t.Parallel()

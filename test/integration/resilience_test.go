@@ -29,7 +29,7 @@ import (
 	"github.com/networking-incubator/coraza-kubernetes-operator/test/framework"
 )
 
-// TestRapidRuleUpdates verifies that rapidly updating ConfigMap rules
+// TestRapidRuleUpdates verifies that rapidly updating RuleSource rules
 // multiple times results in the final state being correctly applied.
 func TestRapidRuleUpdates(t *testing.T) {
 	t.Parallel()
@@ -225,7 +225,7 @@ func TestConcurrentRuleSetUpdates(t *testing.T) {
 	gw.ExpectBlocked("/?test=gamma")
 
 	s.Step("update all rulesets concurrently")
-	// Update all ConfigMaps rapidly
+	// Update all RuleSources rapidly
 	for i, e := range engines {
 		newPattern := fmt.Sprintf("updated-%d", i+1)
 		s.UpdateRuleSource(ns, fmt.Sprintf("rules-%s", e.name), framework.SimpleBlockRule(e.ruleID+100, newPattern))

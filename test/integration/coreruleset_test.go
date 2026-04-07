@@ -31,7 +31,7 @@ import (
 // keep the test focused.
 //
 // For full CRS loading, consider importing github.com/corazawaf/coraza-coreruleset
-// and loading the complete ruleset into ConfigMaps.
+// and loading the complete ruleset into RuleSources.
 //
 // Related: https://github.com/networking-incubator/coraza-kubernetes-operator/issues/12
 func TestCoreRulesetCompatibility(t *testing.T) {
