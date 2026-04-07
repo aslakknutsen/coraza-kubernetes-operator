@@ -174,7 +174,10 @@ func TestRuleSourceDeletion(t *testing.T) {
 		t.Fatalf("failed to delete rulesource: %v", err)
 	}
 
-	s.Step("verify cached rules still apply")
+	s.Step("verify RuleSet becomes degraded after source deletion")
+	s.ExpectRuleSetDegraded(ns, "ruleset")
+
+	s.Step("verify cached rules still apply despite degraded RuleSet")
 	gw.ExpectBlocked("/?test=blocked")
 	gw.ExpectAllowed("/?test=safe")
 }
