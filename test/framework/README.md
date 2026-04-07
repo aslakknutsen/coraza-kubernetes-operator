@@ -81,9 +81,9 @@ SecRule ARGS "@contains attack" "id:1,phase:2,deny,status:403"`)
 | `CreateNamespace(name)` | Create namespace with exact name and cleanup |
 | `CreateRuleSource(ns, name, rules)` | Create RuleSource with WAF rules |
 | `CreateGateway(ns, name)` | Create Istio Gateway with cleanup |
-| `CreateRuleSet(ns, name, configMapNames)` | Create RuleSet with cleanup |
+| `CreateRuleSet(ns, name, sourceNames)` | Create RuleSet with cleanup |
 | `CreateEngine(ns, name, opts)` | Create Engine with cleanup |
-| `TryCreateRuleSet(ns, name, configMapNames)` | Create RuleSet, return error (for validation tests) |
+| `TryCreateRuleSet(ns, name, sourceNames)` | Create RuleSet, return error (for validation tests) |
 | `TryCreateEngine(ns, name, opts)` | Create Engine, return error (for validation tests) |
 | `CreateHTTPRoute(ns, name, gw, backend)` | Create HTTPRoute with cleanup |
 | `CreateEchoBackend(ns, name)` | Deploy echo server (Deployment + Service), wait for Ready |
