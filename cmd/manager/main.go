@@ -102,7 +102,15 @@ func main() {
 	rulesetCache := setupCacheServer(mgr, cfg)
 	setupIstioPrerequisites(mgr, cfg, podNamespace)
 
-	if err := controller.SetupControllers(mgr, rulesetCache, cfg.envoyClusterName, cfg.istioRevision, cfg.defaultWasmImage, podNamespace, cfg.cacheMaxSize); err != nil {
+	if err := controller.SetupControllers(mgr, rulesetCache,
+		controller.RuleSetOpts{MaxPayloadSize: cfg.cacheMaxSize},
+		controller.EngineOpts{
+			EnvoyClusterName:  cfg.envoyClusterName,
+			IstioRevision:     cfg.istioRevision,
+			DefaultWasmImage:  cfg.defaultWasmImage,
+			OperatorNamespace: podNamespace,
+		},
+	); err != nil {
 		setupLog.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}

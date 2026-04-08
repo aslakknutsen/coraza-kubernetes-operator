@@ -50,14 +50,27 @@ const DefaultRuleSetCacheServerPort = 18080
 // Manager - Setup
 // -----------------------------------------------------------------------------
 
-// SetupControllers initializes all controllers
-func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyClusterName, istioRevision, defaultWasmImage, operatorNamespace string, cacheMaxSize int) error {
+// RuleSetOpts holds configuration for the RuleSet reconciler.
+type RuleSetOpts struct {
+	MaxPayloadSize int
+}
+
+// EngineOpts holds configuration for the Engine reconciler.
+type EngineOpts struct {
+	EnvoyClusterName  string
+	IstioRevision     string
+	DefaultWasmImage  string
+	OperatorNamespace string
+}
+
+// SetupControllers initializes all controllers.
+func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, ruleSetOpts RuleSetOpts, engineOpts EngineOpts) error {
 	if err := (&RuleSetReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		Recorder:       mgr.GetEventRecorder("ruleset-controller"),
 		Cache:          rulesetCache,
-		MaxPayloadSize: cacheMaxSize,
+		MaxPayloadSize: ruleSetOpts.MaxPayloadSize,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller RuleSet: %w", err)
 	}
@@ -66,10 +79,10 @@ func SetupControllers(mgr ctrl.Manager, rulesetCache *cache.RuleSetCache, envoyC
 		Client:                    mgr.GetClient(),
 		Scheme:                    mgr.GetScheme(),
 		Recorder:                  mgr.GetEventRecorder("engine-controller"),
-		ruleSetCacheServerCluster: envoyClusterName,
-		istioRevision:             istioRevision,
-		defaultWasmImage:          defaultWasmImage,
-		operatorNamespace:         operatorNamespace,
+		ruleSetCacheServerCluster: engineOpts.EnvoyClusterName,
+		istioRevision:             engineOpts.IstioRevision,
+		defaultWasmImage:          engineOpts.DefaultWasmImage,
+		operatorNamespace:         engineOpts.OperatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller Engine: %w", err)
 	}
