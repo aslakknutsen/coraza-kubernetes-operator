@@ -87,6 +87,22 @@ func (s *captureSink) findInfoEntry(substr string) *logEntry {
 	return nil
 }
 
+// findInfoEntryByCondition returns the first default-Info log where keys include
+// "condition" == conditionType (avoids brittle substring matching when multiple
+// transitions occur in one reconcile).
+func (s *captureSink) findInfoEntryByCondition(conditionType string) *logEntry {
+	for i := range s.entries {
+		if s.entries[i].Level != 0 {
+			continue
+		}
+		kv := kvMap(s.entries[i].KeysAndValues)
+		if v, ok := kv["condition"].(string); ok && v == conditionType {
+			return &s.entries[i]
+		}
+	}
+	return nil
+}
+
 func kvMap(kvs []any) map[string]any {
 	m := make(map[string]any, len(kvs)/2)
 	for i := 0; i+1 < len(kvs); i += 2 {
@@ -164,16 +180,18 @@ func TestLogConditionTransitions(t *testing.T) {
 		applyStatusReady(&conditions, 1, "Configured", "done")
 		logConditionTransitions(log, req, "Engine", before, conditions)
 
-		changedEntry := sink.findInfoEntry("Condition changed")
+		changedEntry := sink.findInfoEntryByCondition("Ready")
 		require.NotNil(t, changedEntry)
+		assert.Contains(t, changedEntry.Msg, "Condition changed")
 		assert.Zero(t, changedEntry.Level)
 		kv := kvMap(changedEntry.KeysAndValues)
 		assert.Equal(t, "Ready", kv["condition"])
 		assert.Equal(t, "False", kv["fromStatus"])
 		assert.Equal(t, "True", kv["toStatus"])
 
-		removedEntry := sink.findInfoEntry("Condition removed")
+		removedEntry := sink.findInfoEntryByCondition("Progressing")
 		require.NotNil(t, removedEntry)
+		assert.Contains(t, removedEntry.Msg, "Condition removed")
 		assert.Zero(t, removedEntry.Level)
 		rkv := kvMap(removedEntry.KeysAndValues)
 		assert.Equal(t, "Progressing", rkv["condition"])
@@ -376,6 +394,8 @@ func TestLogAPIError(t *testing.T) {
 				kv := kvMap(e.KeysAndValues)
 				_, hasOrphan := kv["orphanKey"]
 				assert.False(t, hasOrphan, "orphan key should not appear in log fields")
+				assert.Equal(t, "ns", kv["namespace"], "namespace must still be logged on error path")
+				assert.Equal(t, "obj", kv["name"], "name must still be logged on error path")
 			}
 		}
 		assert.Equal(t, 1, errorEntries, "error should still be logged")
