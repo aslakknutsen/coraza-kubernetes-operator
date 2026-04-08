@@ -70,8 +70,8 @@ func logError(log logr.Logger, req ctrl.Request, kind string, err error, msg str
 // cross-cutting wrapper or metrics integration; that is left for a follow-up.
 func logAPIError(log logr.Logger, req ctrl.Request, kind string, err error, msg string, obj client.Object, extra ...any) {
 	if len(extra)%2 != 0 {
-		logDebug(log, req, kind, "logAPIError called with odd number of extra key-value arguments; skipping extra fields")
-		extra = nil
+		logDebug(log, req, kind, "logAPIError called with odd number of extra key-value arguments; dropping trailing orphan")
+		extra = extra[:len(extra)-1]
 	}
 
 	args := append([]any{"namespace", req.Namespace, "name", req.Name}, extra...)

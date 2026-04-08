@@ -375,7 +375,7 @@ func TestLogAPIError(t *testing.T) {
 		assert.Equal(t, "my-secret", kv["secretName"])
 	})
 
-	t.Run("odd number of extra args logs warning and skips extra fields", func(t *testing.T) {
+	t.Run("odd extra args with single orphan drops it", func(t *testing.T) {
 		log, sink := newCaptureLogger()
 		logAPIError(log, req, "Engine", fmt.Errorf("err"), "Failed", nil, "orphanKey")
 
@@ -399,5 +399,23 @@ func TestLogAPIError(t *testing.T) {
 			}
 		}
 		assert.Equal(t, 1, errorEntries, "error should still be logged")
+	})
+
+	t.Run("odd extra args preserves valid pairs before trailing orphan", func(t *testing.T) {
+		log, sink := newCaptureLogger()
+		logAPIError(log, req, "Engine", fmt.Errorf("err"), "Failed", nil,
+			"secretName", "my-secret", "orphanKey")
+
+		var errorEntry *logEntry
+		for i := range sink.entries {
+			if sink.entries[i].Level == -1 {
+				errorEntry = &sink.entries[i]
+			}
+		}
+		require.NotNil(t, errorEntry, "error should still be logged")
+		kv := kvMap(errorEntry.KeysAndValues)
+		assert.Equal(t, "my-secret", kv["secretName"], "valid pair before orphan must be preserved")
+		_, hasOrphan := kv["orphanKey"]
+		assert.False(t, hasOrphan, "trailing orphan must be dropped")
 	})
 }
