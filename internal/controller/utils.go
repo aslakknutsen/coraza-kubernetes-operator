@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,6 +60,48 @@ func logDebug(log logr.Logger, req ctrl.Request, kind, msg string, keysAndValues
 func logError(log logr.Logger, req ctrl.Request, kind string, err error, msg string, keysAndValues ...any) {
 	args := append([]any{"namespace", req.Namespace, "name", req.Name}, keysAndValues...)
 	log.Error(err, fmt.Sprintf("%s: %s", kind, msg), args...)
+}
+
+// logAPIError logs an error from a Kubernetes API call, enriching it with
+// resourceVersion (from obj, when non-nil), HTTP status code, API reason,
+// and retryAfterSeconds when the error is or wraps a *apierrors.StatusError.
+func logAPIError(log logr.Logger, req ctrl.Request, kind string, err error, msg string, obj client.Object, extra ...any) {
+	if len(extra)%2 != 0 {
+		logDebug(log, req, kind, "logAPIError called with odd number of extra key-value arguments; dropping trailing orphan")
+		extra = extra[:len(extra)-1]
+	}
+
+	args := append([]any{"namespace", req.Namespace, "name", req.Name}, extra...)
+
+	if obj != nil {
+		if rv := obj.GetResourceVersion(); rv != "" {
+			args = append(args, "resourceVersion", rv)
+		}
+	}
+
+	args = append(args, extractStatusErrorFields(err)...)
+	log.Error(err, fmt.Sprintf("%s: %s", kind, msg), args...)
+}
+
+// extractStatusErrorFields returns structured key/value pairs from a
+// *apierrors.StatusError if err is or wraps one.
+func extractStatusErrorFields(err error) []any {
+	var statusErr *apierrors.StatusError
+	if !errors.As(err, &statusErr) {
+		return nil
+	}
+
+	st := statusErr.Status()
+	fields := []any{
+		"apiStatusCode", st.Code,
+		"apiReason", string(st.Reason),
+	}
+
+	if st.Details != nil && st.Details.RetryAfterSeconds > 0 {
+		fields = append(fields, "retryAfterSeconds", st.Details.RetryAfterSeconds)
+	}
+
+	return fields
 }
 
 // -----------------------------------------------------------------------------
@@ -136,7 +179,7 @@ func patchDegraded(
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	setStatusConditionDegraded(log, req, kind, conditions, generation, reason, message)
 	if err := statusWriter.Patch(ctx, obj, patch); err != nil {
-		logError(log, req, kind, err, "Failed to patch status")
+		logAPIError(log, req, kind, err, "Failed to patch status", obj)
 		return err
 	}
 	return nil
@@ -168,7 +211,7 @@ func patchReady(
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	setStatusReady(log, req, kind, conditions, generation, reason, message)
 	if err := statusWriter.Patch(ctx, obj, patch); err != nil {
-		logError(log, req, kind, err, "Failed to patch status")
+		logAPIError(log, req, kind, err, "Failed to patch status", obj)
 		return err
 	}
 	return nil
