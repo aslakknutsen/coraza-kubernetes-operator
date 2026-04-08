@@ -418,4 +418,23 @@ func TestLogAPIError(t *testing.T) {
 		_, hasOrphan := kv["orphanKey"]
 		assert.False(t, hasOrphan, "trailing orphan must be dropped")
 	})
+
+	t.Run("odd extra args preserves multiple pairs before trailing orphan", func(t *testing.T) {
+		log, sink := newCaptureLogger()
+		logAPIError(log, req, "Engine", fmt.Errorf("err"), "Failed", nil,
+			"k1", "v1", "k2", "v2", "orphan")
+
+		var errorEntry *logEntry
+		for i := range sink.entries {
+			if sink.entries[i].Level == -1 {
+				errorEntry = &sink.entries[i]
+			}
+		}
+		require.NotNil(t, errorEntry)
+		kv := kvMap(errorEntry.KeysAndValues)
+		assert.Equal(t, "v1", kv["k1"])
+		assert.Equal(t, "v2", kv["k2"])
+		_, hasOrphan := kv["orphan"]
+		assert.False(t, hasOrphan)
+	})
 }
