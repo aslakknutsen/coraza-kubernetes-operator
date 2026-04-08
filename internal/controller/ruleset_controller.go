@@ -61,9 +61,10 @@ var (
 // RuleSetReconciler reconciles a RuleSet object
 type RuleSetReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder events.EventRecorder
-	Cache    *cache.RuleSetCache
+	Scheme         *runtime.Scheme
+	Recorder       events.EventRecorder
+	Cache          *cache.RuleSetCache
+	MaxPayloadSize int
 }
 
 // SetupWithManager sets up the controller with the Manager.
