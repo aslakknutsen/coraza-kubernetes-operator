@@ -19,8 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func TestBuildServiceEntry_Shape(t *testing.T) {
@@ -224,6 +227,38 @@ func TestIstioPrerequisites_StartReturnsNilOnError(t *testing.T) {
 	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "")
 	err := p.Start(ctx)
 	assert.NoError(t, err, "Start() must return nil even when apply fails")
+}
+
+// captureMsgSink records Info/Error messages for assertions.
+type captureMsgSink struct {
+	msgs []string
+}
+
+func (c *captureMsgSink) Init(logr.RuntimeInfo) {}
+func (c *captureMsgSink) Enabled(int) bool      { return true }
+func (c *captureMsgSink) Info(_ int, msg string, _ ...any) {
+	c.msgs = append(c.msgs, msg)
+}
+func (c *captureMsgSink) Error(_ error, msg string, _ ...any) {
+	c.msgs = append(c.msgs, msg)
+}
+func (c *captureMsgSink) WithValues(...any) logr.LogSink { return c }
+func (c *captureMsgSink) WithName(string) logr.LogSink   { return c }
+
+func TestIstioPrerequisites_StartUsesLoggerFromContext(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-ctxlog", namespace)
+
+	sink := &captureMsgSink{}
+	ctx = logf.IntoContext(ctx, logr.New(sink))
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-ctxlog", namespace, "")
+	require.NoError(t, p.Start(ctx))
+
+	joined := strings.Join(sink.msgs, ";")
+	assert.Contains(t, joined, "Applying ServiceEntry")
+	assert.Contains(t, joined, "Applying DestinationRule")
 }
 
 // -----------------------------------------------------------------------------

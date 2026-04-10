@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // -----------------------------------------------------------------------------
@@ -62,7 +62,7 @@ func NewIstioPrerequisites(c client.Client, reader client.Reader, operatorName, 
 // Start applies the Istio ServiceEntry and DestinationRule for the
 // RuleSet cache server. It satisfies the manager.Runnable interface.
 func (p *IstioPrerequisites) Start(ctx context.Context) error {
-	log := ctrl.Log.WithName("istio-prerequisites")
+	log := logf.FromContext(ctx).WithName("istio-prerequisites")
 
 	if err := p.apply(ctx, log); err != nil {
 		log.Error(err, "Failed to apply Istio prerequisites (controllers will continue without them)")
