@@ -323,10 +323,11 @@ coraza.coreruleset: coraza.generaterules
 CONFORMANCE_EXTRA_FLAGS ?=
 FTW_OVERRIDES ?= $(shell pwd)/test/conformance/.ftw-overrides.yml
 
-# Verifies generator output for pinned CRS (CORERULESET_VERSION + --include-test-rule) against tools/corerulesetgen/testdata/coreruleset_parity.sha256.
+# Verifies generator output for pinned CRS (CORERULESET_VERSION + --include-test-rule + full CRS for parity) against tools/corerulesetgen/testdata/coreruleset_parity.sha256.
+# Conformance needs --include-wasm-unsupported-rules so output matches the pre-exclusion golden hash and FTW exercises the full rule set.
 .PHONY: coreruleset.verify-parity
 coreruleset.verify-parity:
-	@$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule" coraza.generaterules
+	@$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule --include-wasm-unsupported-rules" coraza.generaterules
 	sha256sum -c tools/corerulesetgen/testdata/coreruleset_parity.sha256
 
 .PHONY: test.conformance

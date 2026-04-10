@@ -36,6 +36,29 @@ func TestRegistryCompleteness(t *testing.T) {
 	assert.Equal(t, 67, total, "total unsupported rules")
 }
 
+func TestAllUnsupportedRuleIDs(t *testing.T) {
+	all := AllUnsupportedRuleIDs()
+	incompatible := IncompatibleRuleIDs()
+	redundant := RedundantRuleIDs()
+
+	assert.Len(t, all, len(incompatible)+len(redundant), "AllUnsupportedRuleIDs should return both tiers")
+
+	for i := 1; i < len(all); i++ {
+		assert.Less(t, all[i-1], all[i], "IDs should be sorted ascending")
+	}
+
+	idSet := make(map[int]bool, len(all))
+	for _, id := range all {
+		idSet[id] = true
+	}
+	for _, id := range incompatible {
+		assert.True(t, idSet[id], "incompatible ID %d should be in AllUnsupportedRuleIDs", id)
+	}
+	for _, id := range redundant {
+		assert.True(t, idSet[id], "redundant ID %d should be in AllUnsupportedRuleIDs", id)
+	}
+}
+
 func TestCheckUnsupportedRules_ResponseBodyInspection(t *testing.T) {
 	responseBodyIDs := []int{
 		950150,

@@ -214,7 +214,7 @@ This runs `kubectl-coraza` (`go run ./cmd/kubectl-coraza generate coreruleset` v
 5. Create a RuleSet resource referencing all ConfigMaps
 6. Output everything to `tmp/rules/rules.yaml`
 
-Conformance CI runs `make coreruleset.verify-parity`, which regenerates that manifest with `--include-test-rule` and checks `sha256sum` against `tools/corerulesetgen/testdata/coreruleset_parity.sha256`. After bumping `CORERULESET_VERSION` or changing generator output for that path, refresh the checksum with `make coreruleset.verify-parity` (it will fail until you run `sha256sum tmp/rules/rules.yaml` and replace the hash line in `tools/corerulesetgen/testdata/coreruleset_parity.sha256`).
+Conformance CI runs `make coreruleset.verify-parity`, which regenerates that manifest (see the `coreruleset.verify-parity` target in the Makefile for the exact `kubectl-coraza` flags) and checks `sha256sum` against `tools/corerulesetgen/testdata/coreruleset_parity.sha256`. After bumping `CORERULESET_VERSION` or changing generator output for that path, refresh the checksum with `make coreruleset.verify-parity` (it will fail until you run `sha256sum tmp/rules/rules.yaml` and replace the hash line in `tools/corerulesetgen/testdata/coreruleset_parity.sha256`).
 
 Install the plugin for ad hoc use: build `bin/kubectl-coraza` (`make build`) and ensure it is on your `PATH` as `kubectl-coraza` so `kubectl coraza …` resolves it ([plugin discovery](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/)).
 

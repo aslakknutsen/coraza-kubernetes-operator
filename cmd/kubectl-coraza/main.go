@@ -82,6 +82,7 @@ need metadata.namespace on every object.`,
 	flags.String("name-suffix", "", "optional suffix for ConfigMap names derived from *.conf filenames")
 	flags.String("dry-run", "", "if set to client, print the same manifests and annotate stderr (no cluster access is performed either way)")
 	flags.Bool("skip-size-check", false, "allow very large rules payloads (not recommended; etcd limits may still reject applies)")
+	flags.Bool("include-wasm-unsupported-rules", false, "include rules the operator's WASM engine cannot process (by default these are excluded; see LIMITATIONS.md)")
 
 	root.AddCommand(generate)
 	generate.AddCommand(coreruleset)
@@ -110,6 +111,7 @@ func genCRS(cmd *cobra.Command, _ []string) error {
 	nameSuffix, _ := flags.GetString("name-suffix")
 	dry, _ := flags.GetString("dry-run")
 	skipSize, _ := flags.GetBool("skip-size-check")
+	includeWASMUnsupported, _ := flags.GetBool("include-wasm-unsupported-rules")
 
 	ignoreSet := map[string]struct{}{}
 	if strings.TrimSpace(ignoreCSV) != "" {
@@ -130,19 +132,20 @@ func genCRS(cmd *cobra.Command, _ []string) error {
 	}
 
 	opts := corerulesetgen.Options{
-		RulesDir:         rulesDir,
-		Version:          ver,
-		IgnoreRuleIDs:    ignoreSet,
-		IgnorePMFromFile: ignorePM,
-		IncludeTestRule:  includeTest,
-		RuleSetName:      rulesetName,
-		Namespace:        namespace,
-		DataSecretName:   dataSecret,
-		NamePrefix:       namePrefix,
-		NameSuffix:       nameSuffix,
-		DryRun:           strings.EqualFold(strings.TrimSpace(dry), "client"),
-		SkipSizeCheck:    skipSize,
-		Stderr:           cmd.ErrOrStderr(),
+		RulesDir:                    rulesDir,
+		Version:                     ver,
+		IgnoreRuleIDs:               ignoreSet,
+		IgnorePMFromFile:            ignorePM,
+		IncludeTestRule:             includeTest,
+		RuleSetName:                 rulesetName,
+		Namespace:                   namespace,
+		DataSecretName:              dataSecret,
+		NamePrefix:                  namePrefix,
+		NameSuffix:                  nameSuffix,
+		DryRun:                      strings.EqualFold(strings.TrimSpace(dry), "client"),
+		SkipSizeCheck:               skipSize,
+		IncludeWASMUnsupportedRules: includeWASMUnsupported,
+		Stderr:                      cmd.ErrOrStderr(),
 	}
 
 	_, err := corerulesetgen.Generate(cmd.OutOrStdout(), opts)

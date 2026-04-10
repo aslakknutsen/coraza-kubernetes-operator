@@ -33,6 +33,13 @@ type Options struct {
 	DryRun           bool
 	SkipSizeCheck    bool
 	Stderr           io.Writer
+
+	// IncludeWASMUnsupportedRules controls whether rules from the operator's
+	// WASM-unsupported registry are kept in the output. When false (the zero
+	// value / default), those rule IDs are merged into the effective ignore
+	// set so generated manifests match what the operator accepts. Set to true
+	// to emit the full CRS without operator-side filtering.
+	IncludeWASMUnsupportedRules bool
 }
 
 // Result holds a short summary after a successful Generate.
