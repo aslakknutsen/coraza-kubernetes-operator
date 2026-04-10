@@ -87,6 +87,17 @@ func RedundantRuleIDs() []int {
 	return ruleIDsByTier(TierRedundant)
 }
 
+// AllUnsupportedRuleIDs returns all registered unsupported rule IDs (both
+// incompatible and redundant tiers), sorted ascending.
+func AllUnsupportedRuleIDs() []int {
+	ids := make([]int, 0, len(unsupportedRules))
+	for id := range unsupportedRules {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	return ids
+}
+
 // FormatUnsupportedMessage returns a human-readable status message for the given unsupported rules.
 func FormatUnsupportedMessage(found []UnsupportedRule) string {
 	if len(found) == 0 {

@@ -188,6 +188,77 @@ func TestGenCRS_withDataSecret(t *testing.T) {
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
 
+func TestGenCRS_excludesUnsupportedByDefault(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1"})
+
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stdout.String(), "id:922110,")
+	assert.Contains(t, stdout.String(), "id:42,")
+}
+
+func TestGenCRS_ignoreUnsupportedRulesNone(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1", "--ignore-unsupported-rules=none"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "id:922110,")
+	assert.Contains(t, stdout.String(), "id:42,")
+}
+
+func TestGenCRS_ignoreUnsupportedRulesExplicitWASM(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1", "--ignore-unsupported-rules=wasm"})
+
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stdout.String(), "id:922110,")
+	assert.Contains(t, stdout.String(), "id:42,")
+}
+
+func TestGenCRS_unknownIgnoreUnsupportedProfileKeepsRegistryRule(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1", "--ignore-unsupported-rules=ext_proc"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "id:922110,", "unknown profile should not apply WASM registry until implemented")
+}
+
+func TestGenCRS_ignoreUnsupportedRulesWASMAllowsMixedCase(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1", "--ignore-unsupported-rules=WaSm"})
+
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stdout.String(), "id:922110,")
+}
+
 func TestGenCRS_missingRequiredFlags(t *testing.T) {
 	cmd, _, _ := newTestCommand(t)
 	cmd.SetArgs([]string{"generate", "coreruleset"})
@@ -251,6 +322,7 @@ func newTestCommand(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer)
 	flags.String("name-suffix", "", "")
 	flags.String("dry-run", "", "")
 	flags.Bool("skip-size-check", false, "")
+	flags.String("ignore-unsupported-rules", "wasm", "")
 
 	root.AddCommand(generate)
 	generate.AddCommand(coreruleset)

@@ -33,6 +33,19 @@ type Options struct {
 	DryRun           bool
 	SkipSizeCheck    bool
 	Stderr           io.Writer
+
+	// IgnoreUnsupportedRules selects an unsupported-rule profile whose IDs
+	// are merged into the effective ignore set. Supported values:
+	//   "wasm"  — merge IDs from the operator's WASM-unsupported registry
+	//   "none"  — do not merge any unsupported-rule IDs
+	// Empty string is treated as "none". Future profiles (e.g. "ext_proc")
+	// can be added without changing the flag surface.
+	IgnoreUnsupportedRules string
+
+	// autoIgnoredIDs is populated by Build/mergeUnsupportedIDs: rule IDs
+	// dropped due to a profile merge but not present in the user's
+	// --ignore-rules. Used for clearer warnings in processFileContent.
+	autoIgnoredIDs map[string]struct{}
 }
 
 // Result holds a short summary after a successful Generate.

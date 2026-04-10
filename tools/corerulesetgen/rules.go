@@ -111,7 +111,7 @@ func chainSecRuleGroups(blocks []string) [][]int {
 	return groups
 }
 
-func processFileContent(path string, ignoreIDs map[string]struct{}, ignorePM bool) (string, []string, error) {
+func processFileContent(path string, ignoreIDs, autoIgnored map[string]struct{}, ignorePM bool) (string, []string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", nil, fmt.Errorf("read %s: %w", path, err)
@@ -179,7 +179,7 @@ func processFileContent(path string, ignoreIDs map[string]struct{}, ignorePM boo
 			for _, i := range g {
 				ids = append(ids, extractRuleID(blocks[i]))
 			}
-			warns = append(warns, fmt.Sprintf("  [warn] Ignored rules in %s:\n    - SecRule chain (IDs: %s): dropping entire chain because at least one rule matched ignore or @pmFromFile rules\n", base, strings.Join(ids, ", ")))
+			warns = append(warns, fmt.Sprintf("  [warn] Ignored rules in %s:\n    - SecRule chain (IDs: %s): dropping entire chain because at least one rule matched --ignore-rules, default WASM-unsupported filtering, or @pmFromFile stripping\n", base, strings.Join(ids, ", ")))
 			continue
 		}
 		i := g[0]
@@ -187,8 +187,10 @@ func processFileContent(path string, ignoreIDs map[string]struct{}, ignorePM boo
 			warns = append(warns, fmt.Sprintf("  [warn] Ignored rules in %s:\n    - Rule ID: %s (@pmFromFile not supported)\n", base, extractRuleID(blocks[i])))
 			continue
 		}
-		if _, d := ignoreIDs[extractRuleID(blocks[i])]; d {
-			warns = append(warns, fmt.Sprintf("  [warn] Ignored rules in %s:\n    - Rule ID: %s (Rule ID in ignore list)\n", base, extractRuleID(blocks[i])))
+		rid := extractRuleID(blocks[i])
+		if _, d := ignoreIDs[rid]; d {
+			reason := ignoreReason(rid, autoIgnored)
+			warns = append(warns, fmt.Sprintf("  [warn] Ignored rules in %s:\n    - Rule ID: %s (%s)\n", base, rid, reason))
 		}
 	}
 
@@ -200,6 +202,16 @@ func processFileContent(path string, ignoreIDs map[string]struct{}, ignorePM boo
 		filtered = append(filtered, block)
 	}
 	return strings.Join(filtered, "\n"), warns, nil
+}
+
+func ignoreReason(ruleID string, autoIgnored map[string]struct{}) string {
+	if autoIgnored != nil {
+		if _, w := autoIgnored[ruleID]; w {
+			return "excluded by --ignore-unsupported-rules profile (operator); pass --ignore-unsupported-rules=none to emit this rule"
+		}
+		return "Rule ID in --ignore-rules"
+	}
+	return "Rule ID in ignore list"
 }
 
 func buildConfigMapYAML(path string, opts Options) (name, yamlOut, skipReason string, warns []string, err error) {
@@ -216,7 +228,7 @@ func buildConfigMapYAML(path string, opts Options) (name, yamlOut, skipReason st
 		return "", "", err.Error(), nil, err
 	}
 
-	processed, w, err := processFileContent(path, opts.IgnoreRuleIDs, opts.IgnorePMFromFile)
+	processed, w, err := processFileContent(path, opts.IgnoreRuleIDs, opts.autoIgnoredIDs, opts.IgnorePMFromFile)
 	if err != nil {
 		return "", "", "", nil, err
 	}
