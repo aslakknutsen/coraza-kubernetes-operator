@@ -217,6 +217,85 @@ func mustParseCRSVersion(t *testing.T, v string) CRSVersion {
 	return ver
 }
 
+func TestBuild_excludesWASMUnsupportedRulesByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "unsup.conf")
+	err := os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644)
+	require.NoError(t, err)
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.24.1",
+		RuleSetName:    "rs",
+		DataSecretName: "ds",
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.NotContains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,")
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
+}
+
+func TestBuild_includesWASMUnsupportedRulesWhenOptedIn(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "unsup.conf")
+	err := os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644)
+	require.NoError(t, err)
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:                    tmp,
+		Version:                     "4.24.1",
+		RuleSetName:                 "rs",
+		DataSecretName:              "ds",
+		IncludeWASMUnsupportedRules: true,
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,")
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
+}
+
+func TestBuild_wasmUnsupportedMergesWithUserIgnoreIDs(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "mixed.conf")
+	err := os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx c\" \"id:99,phase:2,pass,nolog\"\n"), 0o644)
+	require.NoError(t, err)
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.24.1",
+		RuleSetName:    "rs",
+		DataSecretName: "ds",
+		IgnoreRuleIDs:  map[string]struct{}{"42": {}},
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.NotContains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,")
+	require.NotContains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:99,")
+}
+
 func TestBuild_confResultWarnsWhenIgnoringPMFromFile(t *testing.T) {
 	tmp := t.TempDir()
 	const name = "pm.conf"

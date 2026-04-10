@@ -35,6 +35,7 @@ Reads `*.conf` and optional `*.data` from a single directory (non-recursive). Ou
 | `--ruleset-name` | RuleSet name (default `default-ruleset`) |
 | `--data-secret-name` | Secret name for `*.data` (default `coreruleset-data`) |
 | `--ignore-rules` | Comma-separated rule IDs to drop |
+| `--include-wasm-unsupported-rules` | Include rules the operator's WASM engine cannot process (default `false`; see `LIMITATIONS.md`) |
 | `--ignore-pmFromFile` | Strip `SecRule` lines using `@pmFromFile` |
 | `--include-test-rule` | Append X-CRS-Test block to `base-rules` |
 | `--name-prefix` / `--name-suffix` | Prefix/suffix for ConfigMap names |

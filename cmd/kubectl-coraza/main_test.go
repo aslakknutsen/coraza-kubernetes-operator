@@ -188,6 +188,36 @@ func TestGenCRS_withDataSecret(t *testing.T) {
 	assert.Contains(t, stdout.String(), "kind: RuleSet")
 }
 
+func TestGenCRS_excludesWASMUnsupportedByDefault(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1"})
+
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stdout.String(), "id:922110,")
+	assert.Contains(t, stdout.String(), "id:42,")
+}
+
+func TestGenCRS_includeWASMUnsupportedFlag(t *testing.T) {
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "unsup.conf")
+	require.NoError(t, os.WriteFile(confPath, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	cmd, stdout, _ := newTestCommand(t)
+	cmd.SetArgs([]string{"generate", "coreruleset", "--rules-dir", dir, "--version", "4.24.1", "--include-wasm-unsupported-rules"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "id:922110,")
+	assert.Contains(t, stdout.String(), "id:42,")
+}
+
 func TestGenCRS_missingRequiredFlags(t *testing.T) {
 	cmd, _, _ := newTestCommand(t)
 	cmd.SetArgs([]string{"generate", "coreruleset"})
@@ -251,6 +281,7 @@ func newTestCommand(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer)
 	flags.String("name-suffix", "", "")
 	flags.String("dry-run", "", "")
 	flags.Bool("skip-size-check", false, "")
+	flags.Bool("include-wasm-unsupported-rules", false, "")
 
 	root.AddCommand(generate)
 	generate.AddCommand(coreruleset)
