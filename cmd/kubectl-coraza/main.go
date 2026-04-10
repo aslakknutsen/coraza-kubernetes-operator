@@ -132,20 +132,20 @@ func genCRS(cmd *cobra.Command, _ []string) error {
 	}
 
 	opts := corerulesetgen.Options{
-		RulesDir:                    rulesDir,
-		Version:                     ver,
-		IgnoreRuleIDs:               ignoreSet,
-		IgnorePMFromFile:            ignorePM,
-		IncludeTestRule:             includeTest,
-		RuleSetName:                 rulesetName,
-		Namespace:                   namespace,
-		DataSecretName:              dataSecret,
-		NamePrefix:                  namePrefix,
-		NameSuffix:                  nameSuffix,
-		DryRun:                      strings.EqualFold(strings.TrimSpace(dry), "client"),
-		SkipSizeCheck:               skipSize,
+		RulesDir:               rulesDir,
+		Version:                ver,
+		IgnoreRuleIDs:          ignoreSet,
+		IgnorePMFromFile:       ignorePM,
+		IncludeTestRule:        includeTest,
+		RuleSetName:            rulesetName,
+		Namespace:              namespace,
+		DataSecretName:         dataSecret,
+		NamePrefix:             namePrefix,
+		NameSuffix:             nameSuffix,
+		DryRun:                 strings.EqualFold(strings.TrimSpace(dry), "client"),
+		SkipSizeCheck:          skipSize,
 		IgnoreUnsupportedRules: ignoreUnsupported,
-		Stderr:                      cmd.ErrOrStderr(),
+		Stderr:                 cmd.ErrOrStderr(),
 	}
 
 	_, err := corerulesetgen.Generate(cmd.OutOrStdout(), opts)
