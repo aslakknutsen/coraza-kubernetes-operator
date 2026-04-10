@@ -19,6 +19,8 @@ package cache
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,6 +90,15 @@ type ruleSetCacheServer struct {
 	gc     GarbageCollectionConfig
 }
 
+// loggerFromContext returns the logr.Logger from ctx if present,
+// otherwise returns the provided fallback logger.
+func loggerFromContext(ctx context.Context, fallback logr.Logger) logr.Logger {
+	if l, err := logr.FromContext(ctx); err == nil {
+		return l
+	}
+	return fallback
+}
+
 // NewServer creates a new RuleSetCacheServer instance.
 func NewServer(cache *RuleSetCache, addr string, logger logr.Logger, gc *GarbageCollectionConfig) *ruleSetCacheServer {
 	gcConfig := DefaultGC()
@@ -102,7 +113,7 @@ func NewServer(cache *RuleSetCache, addr string, logger logr.Logger, gc *Garbage
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rules/", s.handleRules)
+	mux.Handle("/rules/", s.withRequestLogger(http.HandlerFunc(s.handleRules)))
 
 	s.srv = &http.Server{
 		Addr:              addr,
@@ -119,6 +130,8 @@ func NewServer(cache *RuleSetCache, addr string, logger logr.Logger, gc *Garbage
 
 // Start the cache server.
 func (s *ruleSetCacheServer) Start(ctx context.Context) error {
+	log := loggerFromContext(ctx, s.logger).WithName("ruleset-cache")
+
 	ln, err := net.Listen("tcp", s.srv.Addr)
 	if err != nil {
 		return fmt.Errorf("cache server listen: %w", err)
@@ -128,7 +141,7 @@ func (s *ruleSetCacheServer) Start(ctx context.Context) error {
 
 	errChan := make(chan error, 1)
 	go func() {
-		s.logger.Info("Starting ruleset cache server", "addr", s.srv.Addr)
+		log.Info("Starting ruleset cache server", "addr", s.srv.Addr)
 		if err := s.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
@@ -136,17 +149,17 @@ func (s *ruleSetCacheServer) Start(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		s.logger.Info("Shutting down ruleset cache server")
+		log.Info("Shutting down ruleset cache server")
 		s.srv.SetKeepAlivesEnabled(false)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
 		defer cancel()
 
 		if err := s.srv.Shutdown(shutdownCtx); err != nil {
-			s.logger.Error(err, "Error during graceful shutdown, forcing close")
+			log.Error(err, "Error during graceful shutdown, forcing close")
 			return s.srv.Close()
 		}
 
-		s.logger.Info("Cache server shutdown complete")
+		log.Info("Cache server shutdown complete")
 		return nil
 	case err := <-errChan:
 		return err
@@ -156,6 +169,28 @@ func (s *ruleSetCacheServer) Start(ctx context.Context) error {
 // NeedLeaderElection implements the LeaderElectionRunnable interface.
 func (s *ruleSetCacheServer) NeedLeaderElection() bool {
 	return false
+}
+
+// -----------------------------------------------------------------------------
+// RuleSetCacheServer - Request Logging Middleware
+// -----------------------------------------------------------------------------
+
+func (s *ruleSetCacheServer) withRequestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqID := r.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = shortID()
+		}
+		reqLog := loggerFromContext(r.Context(), s.logger).WithValues("requestID", reqID)
+		r = r.WithContext(logr.NewContext(r.Context(), reqLog))
+		next.ServeHTTP(w, r)
+	})
+}
+
+func shortID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // -----------------------------------------------------------------------------
@@ -184,7 +219,9 @@ func (s *ruleSetCacheServer) handleRules(w http.ResponseWriter, r *http.Request)
 	s.handleGetRules(w, r, path)
 }
 
-func (s *ruleSetCacheServer) handleLatest(w http.ResponseWriter, _ *http.Request, cacheKey string) {
+func (s *ruleSetCacheServer) handleLatest(w http.ResponseWriter, r *http.Request, cacheKey string) {
+	log := loggerFromContext(r.Context(), s.logger)
+
 	entry, ok := s.cache.Get(cacheKey)
 	if !ok {
 		http.Error(w, "RuleSet not found", http.StatusNotFound)
@@ -198,7 +235,7 @@ func (s *ruleSetCacheServer) handleLatest(w http.ResponseWriter, _ *http.Request
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		s.logger.Error(err, "Failed to encode latest response")
+		log.Error(err, "Failed to encode latest response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -207,18 +244,20 @@ func (s *ruleSetCacheServer) handleLatest(w http.ResponseWriter, _ *http.Request
 	_, _ = w.Write(buf.Bytes())
 }
 
-func (s *ruleSetCacheServer) handleGetRules(w http.ResponseWriter, _ *http.Request, cacheKey string) {
+func (s *ruleSetCacheServer) handleGetRules(w http.ResponseWriter, r *http.Request, cacheKey string) {
+	log := loggerFromContext(r.Context(), s.logger)
+
 	entry, ok := s.cache.Get(cacheKey)
 	if !ok {
 		http.Error(w, "RuleSet not found", http.StatusNotFound)
 		return
 	}
 
-	s.logger.Info("Serving rules from cache", "cacheKey", cacheKey, "uuid", entry.UUID, "availableKeysCount", s.cache.Len(), "cacheSizeBytes", s.cache.TotalSize())
+	log.V(1).Info("Serving rules from cache", "cacheKey", cacheKey, "uuid", entry.UUID, "availableKeysCount", s.cache.Len(), "cacheSizeBytes", s.cache.TotalSize())
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(entry); err != nil {
-		s.logger.Error(err, "Failed to encode rules response")
+		log.Error(err, "Failed to encode rules response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -256,6 +295,8 @@ func DefaultGC() GarbageCollectionConfig {
 // 1. Age-based: entries older than MaxAge (except latest)
 // 2. Size-based: oldest entries when cache exceeds MaxSize (except latest)
 func (s *ruleSetCacheServer) rungc(ctx context.Context) {
+	log := loggerFromContext(ctx, s.logger).WithName("ruleset-cache-gc")
+
 	ticker := time.NewTicker(s.gc.GCInterval)
 	defer ticker.Stop()
 
@@ -266,19 +307,19 @@ func (s *ruleSetCacheServer) rungc(ctx context.Context) {
 		case <-ticker.C:
 			prunedByAge := s.cache.Prune(s.gc.MaxAge)
 			if prunedByAge > 0 {
-				s.logger.Info("Pruned stale cache entries by age", "count", prunedByAge, "maxAge", s.gc.MaxAge)
+				log.Info("Pruned stale cache entries by age", "count", prunedByAge, "maxAge", s.gc.MaxAge)
 			}
 
 			currentSize := s.cache.TotalSize()
 			if currentSize > s.gc.MaxSize {
 				prunedBySize := s.cache.PruneBySize(s.gc.MaxSize)
 				if prunedBySize > 0 {
-					s.logger.Info("Pruned cache entries by size", "count", prunedBySize, "maxSize", s.gc.MaxSize, "currentSize", s.cache.TotalSize())
+					log.Info("Pruned cache entries by size", "count", prunedBySize, "maxSize", s.gc.MaxSize, "currentSize", s.cache.TotalSize())
 				}
 
 				finalSize := s.cache.TotalSize()
 				if finalSize > s.gc.MaxSize {
-					s.logger.Error(errors.New("cache size exceeds maximum"), "CRITICAL: Cache size exceeds maximum even after pruning - latest entry is too large", "currentSize", finalSize, "maxSize", s.gc.MaxSize, "overage", finalSize-s.gc.MaxSize)
+					log.Error(errors.New("cache size exceeds maximum"), "CRITICAL: Cache size exceeds maximum even after pruning - latest entry is too large", "currentSize", finalSize, "maxSize", s.gc.MaxSize, "overage", finalSize-s.gc.MaxSize)
 				}
 			}
 		}
