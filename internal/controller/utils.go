@@ -63,12 +63,6 @@ func logDebug(log logr.Logger, req ctrl.Request, kind, msg string, keysAndValues
 	log.V(debugLevel).Info(fmt.Sprintf("%s: %s", kind, msg), args...)
 }
 
-// logError logs an error-level message with consistent structured context.
-func logError(log logr.Logger, req ctrl.Request, kind string, err error, msg string, keysAndValues ...any) {
-	args := append([]any{"namespace", req.Namespace, "name", req.Name}, keysAndValues...)
-	log.Error(err, fmt.Sprintf("%s: %s", kind, msg), args...)
-}
-
 // logAPIError logs an error from a Kubernetes API call, enriching it with
 // resourceVersion (from obj, when non-nil), HTTP status code, API reason,
 // and retryAfterSeconds when the error is or wraps a *apierrors.StatusError.
