@@ -329,3 +329,98 @@ SecRule ARGS "@pmFromFile foo.data" "id:2,phase:2,pass,nolog"
 	}
 	require.True(t, found, "expected chain warn when IgnorePMFromFile drops a chained @pmFromFile rule")
 }
+
+func TestBuild_unknownProfileSkipsRegistryMerge(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "future.conf")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"), 0o644))
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreUnsupportedRules: "ext_proc",
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,", "unknown profile must not merge WASM registry IDs")
+}
+
+func TestBuild_emptyIgnoreUnsupportedRulesSkipsRegistryMerge(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "libdefault.conf")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"), 0o644))
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:       tmp,
+		Version:        "4.24.1",
+		RuleSetName:    "rs",
+		DataSecretName: "ds",
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,", "library zero Options must not imply wasm profile (embedders set IgnoreUnsupportedRules explicitly)")
+}
+
+func TestBuild_redundantTierWASMUnsupportedStripped(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "redundant.conf")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:920100,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreUnsupportedRules: "wasm",
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.NotContains(t, bundle.ExtraConfigMaps[0].Doc, "id:920100,")
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
+}
+
+func TestBuild_wasmProfileTrimmedAndCaseInsensitive(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "case.conf")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"SecRule ARGS \"@rx a\" \"id:922110,phase:2,pass,nolog\"\n"+
+			"SecRule ARGS \"@rx b\" \"id:42,phase:2,pass,nolog\"\n"), 0o644))
+
+	ver := mustParseCRSVersion(t, "4.24.1")
+	scan, err := Scan(tmp)
+	require.NoError(t, err)
+
+	bundle, err := Build(Options{
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreUnsupportedRules: "  WaSm  ",
+	}, scan, ver)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.ExtraConfigMaps, 1)
+	require.NotContains(t, bundle.ExtraConfigMaps[0].Doc, "id:922110,")
+	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
+}
