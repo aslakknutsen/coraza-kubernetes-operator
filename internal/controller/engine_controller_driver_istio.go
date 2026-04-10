@@ -63,7 +63,7 @@ func (r *EngineReconciler) provisionIstioEngineWithWasm(ctx context.Context, log
 	// than generating a broad selector.
 	if engine.Spec.Driver.Istio.Wasm.WorkloadSelector == nil {
 		err := fmt.Errorf("workloadSelector is required: a nil selector would match all workloads")
-		logError(log, req, "Engine", err, "Invalid Wasm configuration")
+		logAPIError(log, req, "Engine", err, "Invalid Wasm configuration", &engine)
 		if patchErr := patchDegraded(ctx, r.Status(), r.Recorder, log, req, "Engine", &engine, &engine.Status.Conditions, engine.Generation, "InvalidConfiguration", err.Error()); patchErr != nil {
 			return ctrl.Result{}, patchErr
 		}
@@ -128,7 +128,7 @@ func (r *EngineReconciler) applyWasmPlugin(ctx context.Context, log logr.Logger,
 
 	logDebug(log, req, "Engine", "Setting controller reference on WasmPlugin")
 	if err := controllerutil.SetControllerReference(engine, wasmPlugin, r.Scheme); err != nil {
-		logError(log, req, "Engine", err, "Failed to set owner reference on WasmPlugin")
+		logAPIError(log, req, "Engine", err, "Failed to set owner reference on WasmPlugin", engine)
 		return nil, err
 	}
 

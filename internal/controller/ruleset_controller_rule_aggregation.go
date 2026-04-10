@@ -92,7 +92,7 @@ func (r *RuleSetReconciler) fetchConfigMapRules(
 	data, ok := cm.Data["rules"]
 	if !ok {
 		err := fmt.Errorf("ConfigMap %s missing 'rules' key", configMapName)
-		logError(log, req, "RuleSet", err, "ConfigMap missing required 'rules' key", "configMapName", configMapName)
+		logAPIError(log, req, "RuleSet", err, "ConfigMap missing required 'rules' key", ruleset, "configMapName", configMapName)
 		msg := fmt.Sprintf("ConfigMap %s is missing required 'rules' key", configMapName)
 		if patchErr := patchDegraded(ctx, r.Status(), r.Recorder, log, req, "RuleSet", ruleset, &ruleset.Status.Conditions, ruleset.Generation, "InvalidConfigMap", msg); patchErr != nil {
 			return "", false, true, patchErr

@@ -112,12 +112,12 @@ all: build
 
 .PHONY: build
 build: manifests generate fmt vet lint
-	go build -o bin/manager -tags no_fs_access ./cmd/manager
+	go build -o bin/manager -tags no_fs_access -ldflags "-X main.version=$(VERSION) -X main.gitCommit=$(GIT_REVISION)" ./cmd/manager
 	go build -o bin/kubectl-coraza ./cmd/kubectl-coraza
 
 .PHONY: build.image
 build.image:
-	$(CONTAINER_TOOL) build $(OCI_LABELS_OPERATOR) -t ${CONTROLLER_MANAGER_CONTAINER_IMAGE} .
+	$(CONTAINER_TOOL) build $(OCI_LABELS_OPERATOR) --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_REVISION) -t ${CONTROLLER_MANAGER_CONTAINER_IMAGE} .
 
 .PHONY: build.installer
 build.installer: manifests generate helm.sync ## Build a single install manifest (CRDs + operator)

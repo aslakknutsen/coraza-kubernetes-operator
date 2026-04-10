@@ -64,6 +64,9 @@ func init() {
 // -----------------------------------------------------------------------------
 
 var (
+	version   = "v0.0.0-dev"
+	gitCommit = "unknown"
+
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
@@ -172,7 +175,19 @@ func parseFlags() config {
 
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	kvs := []any{
+		"service", "coraza-kubernetes-operator",
+		"version", version,
+		"commit", gitCommit,
+	}
+	if v := os.Getenv("POD_NAME"); v != "" {
+		kvs = append(kvs, "pod", v)
+	}
+	if v := os.Getenv("NODE_NAME"); v != "" {
+		kvs = append(kvs, "node", v)
+	}
+	ctrl.SetLogger(logger.WithValues(kvs...))
 
 	return cfg
 }
