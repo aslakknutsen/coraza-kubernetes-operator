@@ -32,6 +32,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
@@ -100,10 +101,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	rulesetCache := setupCacheServer(mgr, cfg)
+	kubeClient, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to create kubernetes clientset")
+		os.Exit(1)
+	}
+
+	rulesetCache := setupCacheServer(mgr, cfg, kubeClient)
 	setupIstioPrerequisites(mgr, cfg, podNamespace)
 
-	if err := controller.SetupControllers(mgr, rulesetCache, cfg.envoyClusterName, cfg.istioRevision, cfg.defaultWasmImage, podNamespace); err != nil {
+	if err := controller.SetupControllers(mgr, rulesetCache, cfg.envoyClusterName, cfg.istioRevision, cfg.defaultWasmImage, podNamespace, kubeClient); err != nil {
 		setupLog.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -167,7 +174,7 @@ func parseFlags() config {
 		"Default OCI reference for the Coraza WASM plugin when an Engine omits spec.driver.istio.wasm.image")
 	flag.StringVar(&cfg.operatorName, "operator-name", "", "The operator release name used to derive managed resource names (when unset, Istio prerequisites are skipped)")
 
-	var opts zap.Options
+	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 
 	flag.Parse()
@@ -258,14 +265,15 @@ func buildCacheOptions(operatorNamespace string) ctrlcache.Options {
 	}
 }
 
-func setupCacheServer(mgr ctrl.Manager, cfg config) *cache.RuleSetCache {
+func setupCacheServer(mgr ctrl.Manager, cfg config, kubeClient *kubernetes.Clientset) *cache.RuleSetCache {
 	rulesetCache := cache.NewRuleSetCache()
 	gcConfig := &cache.GarbageCollectionConfig{
 		GCInterval: cfg.cacheGCInterval,
 		MaxAge:     cfg.cacheMaxAge,
 		MaxSize:    cfg.cacheMaxSize,
 	}
-	cacheServer := cache.NewServer(rulesetCache, fmt.Sprintf(":%d", cfg.cacheServerPort), ctrl.Log, gcConfig)
+	tokenReview := kubeClient.AuthenticationV1().TokenReviews()
+	cacheServer := cache.NewServer(rulesetCache, fmt.Sprintf(":%d", cfg.cacheServerPort), ctrl.Log, gcConfig, tokenReview)
 	if err := mgr.Add(cacheServer); err != nil {
 		setupLog.Error(err, "unable to add cache server to manager")
 		os.Exit(1)
