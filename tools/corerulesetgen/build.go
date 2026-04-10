@@ -101,15 +101,28 @@ func Build(opts Options, scan ScanResult, ver CRSVersion) (*ManifestBundle, erro
 // out via IncludeWASMUnsupportedRules.
 func mergeWASMUnsupportedIDs(opts Options) Options {
 	if opts.IncludeWASMUnsupportedRules {
+		opts.wasmAutoIgnoredIDs = nil
 		return opts
 	}
-	merged := make(map[string]struct{}, len(opts.IgnoreRuleIDs)+len(rulesets.AllUnsupportedRuleIDs()))
+	unsupportedIDs := rulesets.AllUnsupportedRuleIDs()
+	userIgnore := opts.IgnoreRuleIDs
+	merged := make(map[string]struct{}, len(opts.IgnoreRuleIDs)+len(unsupportedIDs))
 	for id := range opts.IgnoreRuleIDs {
 		merged[id] = struct{}{}
 	}
-	for _, id := range rulesets.AllUnsupportedRuleIDs() {
-		merged[strconv.Itoa(id)] = struct{}{}
+	wasmOnly := make(map[string]struct{}, len(unsupportedIDs))
+	for _, id := range unsupportedIDs {
+		sid := strconv.Itoa(id)
+		merged[sid] = struct{}{}
+		if userIgnore == nil {
+			wasmOnly[sid] = struct{}{}
+			continue
+		}
+		if _, fromUser := userIgnore[sid]; !fromUser {
+			wasmOnly[sid] = struct{}{}
+		}
 	}
 	opts.IgnoreRuleIDs = merged
+	opts.wasmAutoIgnoredIDs = wasmOnly
 	return opts
 }

@@ -40,6 +40,11 @@ type Options struct {
 	// set so generated manifests match what the operator accepts. Set to true
 	// to emit the full CRS without operator-side filtering.
 	IncludeWASMUnsupportedRules bool
+
+	// wasmAutoIgnoredIDs is populated by Build/mergeWASMUnsupportedIDs: rule IDs
+	// dropped due to the WASM registry merge but not present in the user's
+	// --ignore-rules. Used for clearer warnings in processFileContent.
+	wasmAutoIgnoredIDs map[string]struct{}
 }
 
 // Result holds a short summary after a successful Generate.
