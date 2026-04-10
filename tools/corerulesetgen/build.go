@@ -3,6 +3,7 @@ package corerulesetgen
 import (
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets"
 )
@@ -41,7 +42,7 @@ type ManifestBundle struct {
 // Build produces base ConfigMap, per-.conf ConfigMaps, optional Secret, and RuleSet from a
 // parsed [CRSVersion]. It does not read stderr or write to stdout.
 func Build(opts Options, scan ScanResult, ver CRSVersion) (*ManifestBundle, error) {
-	opts = mergeWASMUnsupportedIDs(opts)
+	opts = mergeUnsupportedIDs(opts)
 
 	baseYAML, baseRulesScalar := baseRulesYAML(ver.Normalized, ver.Setup, opts.IncludeTestRule)
 	baseYAML = injectNamespaceInBaseConfigMapYAML(baseYAML, opts.Namespace)
@@ -96,33 +97,48 @@ func Build(opts Options, scan ScanResult, ver CRSVersion) (*ManifestBundle, erro
 	}, nil
 }
 
-// mergeWASMUnsupportedIDs returns a copy of opts with the operator's WASM
-// unsupported rule IDs merged into IgnoreRuleIDs, unless the caller opted
-// out via IncludeWASMUnsupportedRules.
-func mergeWASMUnsupportedIDs(opts Options) Options {
-	if opts.IncludeWASMUnsupportedRules {
-		opts.wasmAutoIgnoredIDs = nil
+// UnsupportedRuleProfileWASM is the profile name for the WASM engine.
+const UnsupportedRuleProfileWASM = "wasm"
+
+// mergeUnsupportedIDs returns a copy of opts with unsupported rule IDs
+// for the selected profile merged into IgnoreRuleIDs. When no profile
+// matches (empty string or "none"), no IDs are merged.
+func mergeUnsupportedIDs(opts Options) Options {
+	ids := unsupportedIDsForProfile(opts.IgnoreUnsupportedRules)
+	if len(ids) == 0 {
+		opts.autoIgnoredIDs = nil
 		return opts
 	}
-	unsupportedIDs := rulesets.AllUnsupportedRuleIDs()
+
 	userIgnore := opts.IgnoreRuleIDs
-	merged := make(map[string]struct{}, len(opts.IgnoreRuleIDs)+len(unsupportedIDs))
+	merged := make(map[string]struct{}, len(opts.IgnoreRuleIDs)+len(ids))
 	for id := range opts.IgnoreRuleIDs {
 		merged[id] = struct{}{}
 	}
-	wasmOnly := make(map[string]struct{}, len(unsupportedIDs))
-	for _, id := range unsupportedIDs {
+	autoOnly := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
 		sid := strconv.Itoa(id)
 		merged[sid] = struct{}{}
 		if userIgnore == nil {
-			wasmOnly[sid] = struct{}{}
+			autoOnly[sid] = struct{}{}
 			continue
 		}
 		if _, fromUser := userIgnore[sid]; !fromUser {
-			wasmOnly[sid] = struct{}{}
+			autoOnly[sid] = struct{}{}
 		}
 	}
 	opts.IgnoreRuleIDs = merged
-	opts.wasmAutoIgnoredIDs = wasmOnly
+	opts.autoIgnoredIDs = autoOnly
 	return opts
+}
+
+// unsupportedIDsForProfile returns the unsupported rule IDs for a given
+// profile name. Returns nil for unknown or empty profiles.
+func unsupportedIDsForProfile(profile string) []int {
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case UnsupportedRuleProfileWASM:
+		return rulesets.AllUnsupportedRuleIDs()
+	default:
+		return nil
+	}
 }

@@ -63,7 +63,7 @@ SecRule ARGS "@pmFromFile foo.data" "id:2,phase:2,pass,nolog"
 	require.True(t, strings.Contains(strings.Join(warns, ""), "SecRule chain"))
 }
 
-func TestProcessFileContent_warnWasmAutoIgnoreVsUserIgnore(t *testing.T) {
+func TestProcessFileContent_warnAutoIgnoreVsUserIgnore(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "x.conf")
 	content := `SecRule ARGS "@rx a" "id:922110,phase:2,pass,nolog"`
@@ -72,14 +72,14 @@ func TestProcessFileContent_warnWasmAutoIgnoreVsUserIgnore(t *testing.T) {
 	_, warns, err := processFileContent(path, map[string]struct{}{"922110": {}}, map[string]struct{}{"922110": {}}, false)
 	require.NoError(t, err)
 	joined := strings.Join(warns, "")
-	require.Contains(t, joined, "WASM-unsupported")
-	require.Contains(t, joined, "--include-wasm-unsupported-rules")
+	require.Contains(t, joined, "--ignore-unsupported-rules")
+	require.Contains(t, joined, "profile")
 
 	_, warns2, err := processFileContent(path, map[string]struct{}{"922110": {}}, nil, false)
 	require.NoError(t, err)
 	joined2 := strings.Join(warns2, "")
 	require.Contains(t, joined2, "Rule ID in ignore list")
-	require.NotContains(t, joined2, "WASM-unsupported")
+	require.NotContains(t, joined2, "--ignore-unsupported-rules")
 }
 
 func TestProcessFileContent_dropsFullChainWhenIDIgnored(t *testing.T) {

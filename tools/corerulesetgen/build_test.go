@@ -217,7 +217,7 @@ func mustParseCRSVersion(t *testing.T, v string) CRSVersion {
 	return ver
 }
 
-func TestBuild_excludesWASMUnsupportedRulesByDefault(t *testing.T) {
+func TestBuild_excludesUnsupportedRulesWithWASMProfile(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "unsup.conf")
 	err := os.WriteFile(path, []byte(
@@ -230,10 +230,11 @@ func TestBuild_excludesWASMUnsupportedRulesByDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	bundle, err := Build(Options{
-		RulesDir:       tmp,
-		Version:        "4.24.1",
-		RuleSetName:    "rs",
-		DataSecretName: "ds",
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreUnsupportedRules: "wasm",
 	}, scan, ver)
 	require.NoError(t, err)
 
@@ -242,7 +243,7 @@ func TestBuild_excludesWASMUnsupportedRulesByDefault(t *testing.T) {
 	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
 }
 
-func TestBuild_includesWASMUnsupportedRulesWhenOptedIn(t *testing.T) {
+func TestBuild_includesUnsupportedRulesWhenProfileNone(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "unsup.conf")
 	err := os.WriteFile(path, []byte(
@@ -255,11 +256,11 @@ func TestBuild_includesWASMUnsupportedRulesWhenOptedIn(t *testing.T) {
 	require.NoError(t, err)
 
 	bundle, err := Build(Options{
-		RulesDir:                    tmp,
-		Version:                     "4.24.1",
-		RuleSetName:                 "rs",
-		DataSecretName:              "ds",
-		IncludeWASMUnsupportedRules: true,
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreUnsupportedRules: "none",
 	}, scan, ver)
 	require.NoError(t, err)
 
@@ -268,7 +269,7 @@ func TestBuild_includesWASMUnsupportedRulesWhenOptedIn(t *testing.T) {
 	require.Contains(t, bundle.ExtraConfigMaps[0].Doc, "id:42,")
 }
 
-func TestBuild_wasmUnsupportedMergesWithUserIgnoreIDs(t *testing.T) {
+func TestBuild_profileMergesWithUserIgnoreIDs(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "mixed.conf")
 	err := os.WriteFile(path, []byte(
@@ -282,11 +283,12 @@ func TestBuild_wasmUnsupportedMergesWithUserIgnoreIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	bundle, err := Build(Options{
-		RulesDir:       tmp,
-		Version:        "4.24.1",
-		RuleSetName:    "rs",
-		DataSecretName: "ds",
-		IgnoreRuleIDs:  map[string]struct{}{"42": {}},
+		RulesDir:               tmp,
+		Version:                "4.24.1",
+		RuleSetName:            "rs",
+		DataSecretName:         "ds",
+		IgnoreRuleIDs:          map[string]struct{}{"42": {}},
+		IgnoreUnsupportedRules: "wasm",
 	}, scan, ver)
 	require.NoError(t, err)
 
