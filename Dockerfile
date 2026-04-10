@@ -6,6 +6,8 @@ FROM golang:1.26.1@sha256:595c7847cff97c9a9e76f015083c481d26078f961c9c8dca392313
 
 ARG TARGETOS
 ARG TARGETARCH
+ARG VERSION=v0.0.0-dev
+ARG GIT_COMMIT=unknown
 
 WORKDIR /workspace
 
@@ -16,7 +18,10 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -o manager -tags no_fs_access ./cmd/manager
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -o manager \
+    -tags no_fs_access \
+    -ldflags "-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT}" \
+    ./cmd/manager
 
 # ------------------------------------------------------------------------------
 # Final

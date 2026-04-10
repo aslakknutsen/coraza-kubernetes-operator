@@ -191,7 +191,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // driver configuration. Currently, only Istio driver with Wasm mode is supported.
 func (r *EngineReconciler) handleInvalidDriverConfiguration(ctx context.Context, log logr.Logger, req ctrl.Request, engine *wafv1alpha1.Engine) error {
 	err := fmt.Errorf("invalid driver configuration: only Istio driver with Wasm mode is currently supported")
-	logError(log, req, "Engine", err, "Invalid driver configuration")
+	logAPIError(log, req, "Engine", err, "Invalid driver configuration", engine)
 
 	if engine.Status == nil {
 		engine.Status = &wafv1alpha1.EngineStatus{}

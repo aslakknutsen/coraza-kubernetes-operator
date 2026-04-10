@@ -76,7 +76,7 @@ func (r *RuleSetReconciler) loadRuleDataSecret(
 		}
 		return nil, true, nil
 	case errors.As(err, &typeMismatch):
-		logError(log, req, "RuleSet", err, "RuleData secret has wrong type", "secretName", ruleDataName)
+		logAPIError(log, req, "RuleSet", err, "RuleData secret has wrong type", ruleset, "secretName", ruleDataName)
 		msg := fmt.Sprintf("Failed to use RuleData secret %s: %v", ruleDataName, err)
 		if patchErr := patchDegraded(ctx, r.Status(), r.Recorder, log, req, "RuleSet", ruleset, &ruleset.Status.Conditions, ruleset.Generation, "RuleDataSecretTypeMismatch", msg); patchErr != nil {
 			return nil, true, patchErr

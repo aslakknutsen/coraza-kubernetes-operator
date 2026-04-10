@@ -34,6 +34,14 @@ logging:
   # When true, uses console encoder with debug level (development mode).
   # When false (default), uses JSON encoder with info level (production mode).
   development: false
+  # Time encoding for structured logs. Use "rfc3339" or "rfc3339nano" for
+  # compliance auditing. See --zap-time-encoding in controller-runtime.
+  timeEncoding: rfc3339nano
+  # When true, inject POD_NAME and NODE_NAME via the Downward API so the
+  # operator logs include pod/node context. On OpenShift, where the logging
+  # collector already enriches records with pod/node metadata, set false to
+  # avoid duplicate fields.
+  includePodMetadata: true
 
 istio:
   # When empty, the operator does not set an Istio revision label on managed resources.
