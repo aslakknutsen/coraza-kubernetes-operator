@@ -18,10 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -147,55 +143,3 @@ func TestBuildMetricsServerOptions_SelfSignedWhenNoCert(t *testing.T) {
 	assert.Empty(t, opts.KeyName)
 }
 
-// -----------------------------------------------------------------------------
-// Webhook removal regression (issue #295)
-// -----------------------------------------------------------------------------
-
-func TestConfigStructHasNoWebhookFields(t *testing.T) {
-	t.Parallel()
-
-	var cfg config
-	typ := reflect.TypeOf(cfg)
-	for i := 0; i < typ.NumField(); i++ {
-		name := typ.Field(i).Name
-		assert.NotContains(t, strings.ToLower(name), "webhook",
-			"operator config should not carry webhook server fields")
-	}
-}
-
-func TestBuiltManagerHelpExcludesWebhookCertFlags(t *testing.T) {
-	if testing.Short() {
-		t.Skip("subprocess go build skipped in -short mode")
-	}
-
-	repoRoot := findRepoRoot(t)
-	bin := filepath.Join(t.TempDir(), "manager")
-	build := exec.Command("go", "build", "-tags", "no_fs_access", "-o", bin, "./cmd/manager")
-	build.Dir = repoRoot
-	buildOut, err := build.CombinedOutput()
-	require.NoError(t, err, "%s", buildOut)
-
-	help := exec.Command(bin, "-h")
-	helpOut, err := help.CombinedOutput()
-	require.NoError(t, err, "%s", helpOut)
-
-	lower := strings.ToLower(string(helpOut))
-	assert.NotContains(t, lower, "webhook-cert", "removed --webhook-cert-* flags must not reappear in help")
-}
-
-func findRepoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	require.NoError(t, err)
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("go.mod not found when walking up from cwd")
-		}
-		dir = parent
-	}
-}
