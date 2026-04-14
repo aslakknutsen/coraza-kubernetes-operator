@@ -142,4 +142,3 @@ func TestBuildMetricsServerOptions_SelfSignedWhenNoCert(t *testing.T) {
 	assert.Empty(t, opts.CertName)
 	assert.Empty(t, opts.KeyName)
 }
-
