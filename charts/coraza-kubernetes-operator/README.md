@@ -2,7 +2,7 @@
 
 Deploys the [Coraza Kubernetes Operator](https://github.com/networking-incubator/coraza-kubernetes-operator) — declarative Web Application Firewall (WAF) support for Kubernetes Gateways.
 
-> **Requires Kubernetes ≥1.33.0 or OpenShift Container Platform ≥4.20.** The chart and operator use `resizePolicy` and the `Chart.yaml` enforces this minimum.
+> **Requires Kubernetes ≥1.32.0 or OpenShift Container Platform ≥4.20.** The `Chart.yaml` enforces this minimum via `kubeVersion`.
 
 
 ## Installation
@@ -68,10 +68,10 @@ When `openshift.enabled=true`, `runAsUser`, `fsGroup`, and `fsGroupChangePolicy`
 | `logging.timeEncoding`                                | string | `rfc3339nano`                                             | Timestamp format (`epoch`, `millis`, `nano`, `iso8601`, `rfc3339`, `rfc3339nano`). Only used when `development=false` |
 | `istio.revision`                                      | string | `""`                                                      | Istio control plane revision label; empty means no revision label on managed resources                      |
 | `defaultWasmImage`                                    | string | `""`                                                      | Default WASM plugin OCI URL when an Engine omits `spec.driver.istio.wasm.image`; empty uses operator built-in default |
-| `createNamespace`                                     | bool   | `true`                                                    | Create the release namespace as a chart-managed resource with PSS labels                                    |
+| `createNamespace`                                     | bool   | `true`                                                    | Manage the release namespace with Pod Security Standard labels. Requires `--create-namespace` on first install |
 | `openshift.enabled`                                   | bool   | `false`                                                   | Omit UID/fsGroup from pod security context for OpenShift SCC compatibility                                  |
 | `podSecurityStandard.version`                         | string | `latest`                                                  | Kubernetes version for Pod Security Standard labels (`latest` or `vX.YZ`)                                    |
-| **Kubernetes version**                                | string | `1.33+`                                                   | Minimum cluster version required by this chart (due to resizePolicy API)                                    |
+| **Kubernetes version**                                | string | `1.32+`                                                   | Minimum cluster version required by this chart                                                              |
 | `nodeSelector`                                        | object | `{}`                                                      | Node selector constraints                                                                                   |
 | `tolerations`                                         | list   | `[]`                                                      | Tolerations                                                                                                 |
 | `affinity`                                            | object | `{}`                                                      | Affinity rules                                                                                              |
