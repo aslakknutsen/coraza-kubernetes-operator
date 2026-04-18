@@ -59,7 +59,7 @@ spec:
             - --istio-revision={{ .Values.istio.revision }}
             {{- end }}
             - --operator-name={{ include "coraza-operator.fullname" . }}
-            {{- if .Values.istio.prerequisitesReconcileInterval }}
+            {{- if ne (toString .Values.istio.prerequisitesReconcileInterval) "" }}
             - --istio-prerequisites-reconcile-interval={{ .Values.istio.prerequisitesReconcileInterval }}
             {{- end }}
             {{- if .Values.defaultWasmImage }}

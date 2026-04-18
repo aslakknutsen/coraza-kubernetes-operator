@@ -147,7 +147,8 @@ type config struct {
 	envoyClusterName  string
 	istioRevision     string
 	defaultWasmImage  string
-	operatorName                       string
+	operatorName      string
+
 	istioPrerequisitesReconcileInterval time.Duration
 }
 
