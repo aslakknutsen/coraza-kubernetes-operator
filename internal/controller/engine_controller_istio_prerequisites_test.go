@@ -324,6 +324,103 @@ func TestIstioPrerequisites_ZeroIntervalReturnsImmediately(t *testing.T) {
 	}
 }
 
+func TestIstioPrerequisites_NegativeIntervalDisablesPeriodic(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+
+	// reconcileInterval <= 0 must disable the ticker loop (same as zero).
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "", -1*time.Second)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start with negative interval should return immediately, not block")
+	}
+}
+
+func TestIstioPrerequisites_PeriodicStartSurvivesMissingDeployment(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "missing-deploy", namespace, "", 40*time.Millisecond)
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	// Several ticks: apply keeps failing but Start must not exit or return a non-nil error.
+	time.Sleep(150 * time.Millisecond)
+
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err, "Start must return nil on cancel even when apply never succeeds")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after context cancellation")
+	}
+}
+
+func TestIstioPrerequisites_PeriodicReapplyCorrectsSpecDrift(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-drift", namespace)
+
+	interval := 50 * time.Millisecond
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-drift", namespace, "", interval)
+
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	resourceName := "test-op-drift-ruleset-cache"
+	require.Eventually(t, func() bool {
+		se := &unstructured.Unstructured{}
+		se.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		return k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, se) == nil
+	}, 2*time.Second, 10*time.Millisecond, "initial ServiceEntry must exist")
+
+	se := &unstructured.Unstructured{}
+	se.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+	})
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{
+		Name: resourceName, Namespace: namespace,
+	}, se))
+
+	// Simulate an admin mutating operator-managed fields; next SSA tick should revert.
+	require.NoError(t, unstructured.SetNestedField(se.Object, "MESH_EXTERNAL", "spec", "location"))
+	require.NoError(t, k8sClient.Update(ctx, se))
+
+	require.Eventually(t, func() bool {
+		check := &unstructured.Unstructured{}
+		check.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, check); err != nil {
+			return false
+		}
+		loc, found, err := unstructured.NestedString(check.Object, "spec", "location")
+		return err == nil && found && loc == "MESH_INTERNAL"
+	}, 3*time.Second, 20*time.Millisecond, "periodic SSA should restore spec.location after drift")
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
 func TestIstioPrerequisites_PeriodicLoopSurvivesMultipleTicks(t *testing.T) {
 	ctx := context.Background()
 	namespace := setupTestNamespace(t, ctx)
