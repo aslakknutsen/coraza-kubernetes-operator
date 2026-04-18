@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,44 +31,78 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// DefaultIstioPrerequisitesReconcileInterval is the default interval at which
+// the operator re-applies the Istio ServiceEntry and DestinationRule.
+// Set to 0 to disable periodic re-apply (startup-only).
+const DefaultIstioPrerequisitesReconcileInterval = 5 * time.Minute
+
 // -----------------------------------------------------------------------------
 // Istio Prerequisites
 // -----------------------------------------------------------------------------
 
 // IstioPrerequisites creates the Istio ServiceEntry and DestinationRule
 // resources required for the RuleSet cache server to be reachable from
-// Envoy sidecars within the mesh. These resources are applied once at
-// startup using server-side apply.
+// Envoy sidecars within the mesh. Resources are applied at startup and,
+// when reconcileInterval > 0, periodically re-applied via server-side
+// apply so they self-heal after accidental deletion or drift.
 type IstioPrerequisites struct {
-	client        client.Client
-	reader        client.Reader
-	operatorName  string
-	namespace     string
-	istioRevision string
+	client            client.Client
+	reader            client.Reader
+	operatorName      string
+	namespace         string
+	istioRevision     string
+	reconcileInterval time.Duration
 }
 
 // NewIstioPrerequisites returns a new IstioPrerequisites runnable.
 // The reader should be a direct API reader (not cached) to avoid
 // setting up a cluster-wide Deployment informer for a one-shot lookup.
-func NewIstioPrerequisites(c client.Client, reader client.Reader, operatorName, namespace, istioRevision string) *IstioPrerequisites {
+//
+// When reconcileInterval is positive, Start will re-apply the resources
+// on that cadence. Zero or negative disables periodic re-apply (startup only).
+func NewIstioPrerequisites(c client.Client, reader client.Reader, operatorName, namespace, istioRevision string, reconcileInterval time.Duration) *IstioPrerequisites {
 	return &IstioPrerequisites{
-		client:        c,
-		reader:        reader,
-		operatorName:  operatorName,
-		namespace:     namespace,
-		istioRevision: istioRevision,
+		client:            c,
+		reader:            reader,
+		operatorName:      operatorName,
+		namespace:         namespace,
+		istioRevision:     istioRevision,
+		reconcileInterval: reconcileInterval,
 	}
 }
 
 // Start applies the Istio ServiceEntry and DestinationRule for the
-// RuleSet cache server. It satisfies the manager.Runnable interface.
+// RuleSet cache server and, when reconcileInterval > 0, re-applies
+// them periodically until ctx is cancelled. It satisfies the
+// manager.Runnable interface and never returns a non-nil error from
+// apply failures (the manager stays running).
 func (p *IstioPrerequisites) Start(ctx context.Context) error {
 	log := ctrl.Log.WithName("istio-prerequisites")
 
 	if err := p.apply(ctx, log); err != nil {
 		log.Error(err, "Failed to apply Istio prerequisites (controllers will continue without them)")
 	}
-	return nil
+
+	if p.reconcileInterval <= 0 {
+		log.Info("Periodic Istio prerequisites reconciliation is disabled")
+		return nil
+	}
+
+	log.Info("Starting periodic Istio prerequisites reconciliation", "interval", p.reconcileInterval)
+	ticker := time.NewTicker(p.reconcileInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("Stopping periodic Istio prerequisites reconciliation")
+			return nil
+		case <-ticker.C:
+			if err := p.apply(ctx, log); err != nil {
+				log.Error(err, "Failed to re-apply Istio prerequisites")
+			}
+		}
+	}
 }
 
 func (p *IstioPrerequisites) apply(ctx context.Context, log logr.Logger) error {

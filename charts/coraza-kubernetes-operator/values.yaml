@@ -50,6 +50,12 @@ logging:
 istio:
   # When empty, the operator does not set an Istio revision label on managed resources.
   revision: ""
+  # Interval at which Istio prerequisite resources (ServiceEntry/DestinationRule)
+  # are re-applied for self-healing after accidental deletion or drift.
+  # Set to "0s" to disable periodic re-apply (startup-only).
+  # Operator-managed Istio resources are reconciled to desired state on this
+  # interval; manual edits to those objects will be reverted.
+  prerequisitesReconcileInterval: "5m"
 
 # Default WASM plugin OCI URL when an Engine omits spec.driver.istio.wasm.image.
 # When empty, the operator's built-in default (internal/defaults.DefaultCorazaWasmOCIReference) is used.
