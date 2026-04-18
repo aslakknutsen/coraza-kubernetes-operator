@@ -148,6 +148,8 @@ type config struct {
 	istioRevision     string
 	defaultWasmImage  string
 	operatorName      string
+
+	istioPrerequisitesReconcileInterval time.Duration
 }
 
 func parseFlags() config {
@@ -173,6 +175,10 @@ func parseFlags() config {
 	flag.StringVar(&cfg.defaultWasmImage, "default-wasm-image", resolveDefaultWasmImage(),
 		"Default OCI reference for the Coraza WASM plugin when an Engine omits spec.driver.istio.wasm.image")
 	flag.StringVar(&cfg.operatorName, "operator-name", "", "The operator release name used to derive managed resource names (when unset, Istio prerequisites are skipped)")
+	flag.DurationVar(&cfg.istioPrerequisitesReconcileInterval, "istio-prerequisites-reconcile-interval", controller.DefaultIstioPrerequisitesReconcileInterval,
+		"Interval at which Istio prerequisite resources (ServiceEntry/DestinationRule) are re-applied for self-healing. "+
+			"Set to 0 to disable periodic re-apply and only apply at startup. "+
+			"For HA deployments, use --leader-elect so only the leader runs this.")
 
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
@@ -287,7 +293,7 @@ func setupIstioPrerequisites(mgr ctrl.Manager, cfg config, podNamespace string) 
 		return
 	}
 
-	istioPrereqs := controller.NewIstioPrerequisites(mgr.GetClient(), mgr.GetAPIReader(), cfg.operatorName, podNamespace, cfg.istioRevision)
+	istioPrereqs := controller.NewIstioPrerequisites(mgr.GetClient(), mgr.GetAPIReader(), cfg.operatorName, podNamespace, cfg.istioRevision, cfg.istioPrerequisitesReconcileInterval)
 	if err := mgr.Add(istioPrereqs); err != nil {
 		setupLog.Error(err, "unable to add Istio prerequisites runnable to manager")
 		os.Exit(1)
