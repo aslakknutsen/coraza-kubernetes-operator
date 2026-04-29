@@ -48,8 +48,8 @@ export default function EngineDetailPage() {
     );
   }
 
-  const driverType = engine.spec.driver?.type ?? 'wasm';
-  const wasmImage = engine.spec.driver?.wasm?.image;
+  const driverType = engine.spec?.driver?.type ?? 'wasm';
+  const wasmImage = engine.spec?.driver?.wasm?.image;
 
   return (
     <>
@@ -77,20 +77,22 @@ export default function EngineDetailPage() {
               <DescriptionListGroup>
                 <DescriptionListTerm>RuleSet</DescriptionListTerm>
                 <DescriptionListDescription>
-                  <Link to={`/coraza/rulesets/${engine.spec.ruleSet.name}?ns=${namespace}`}>
-                    {engine.spec.ruleSet.name}
-                  </Link>
+                  {engine.spec?.ruleSet?.name ? (
+                    <Link to={`/coraza/rulesets/${engine.spec.ruleSet.name}?ns=${namespace}`}>
+                      {engine.spec.ruleSet.name}
+                    </Link>
+                  ) : '-'}
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Target</DescriptionListTerm>
                 <DescriptionListDescription>
-                  {engine.spec.target.type}{engine.spec.target.name ? ` / ${engine.spec.target.name}` : ''}
+                  {engine.spec?.target?.type ?? '-'}{engine.spec?.target?.name ? ` / ${engine.spec.target.name}` : ''}
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Failure Policy</DescriptionListTerm>
-                <DescriptionListDescription>{engine.spec.failurePolicy ?? 'fail'}</DescriptionListDescription>
+                <DescriptionListDescription>{engine.spec?.failurePolicy ?? 'fail'}</DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Driver</DescriptionListTerm>
@@ -104,15 +106,15 @@ export default function EngineDetailPage() {
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
-              {engine.spec.driver?.wasm?.imagePullSecret && (
+              {engine.spec?.driver?.wasm?.imagePullSecret && (
                 <DescriptionListGroup>
                   <DescriptionListTerm>Image Pull Secret</DescriptionListTerm>
                   <DescriptionListDescription>
-                    <code>{engine.spec.driver.wasm.imagePullSecret}</code>
+                    <code>{engine.spec.driver!.wasm!.imagePullSecret}</code>
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
-              {engine.spec.ruleSetCacheServer && (
+              {engine.spec?.ruleSetCacheServer && (
                 <DescriptionListGroup>
                   <DescriptionListTerm>Poll Interval</DescriptionListTerm>
                   <DescriptionListDescription>

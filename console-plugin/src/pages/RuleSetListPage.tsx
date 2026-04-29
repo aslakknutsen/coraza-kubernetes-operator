@@ -66,8 +66,8 @@ export default function RuleSetListPage() {
                     </Link>
                   </td>
                   <td>{r.metadata?.namespace}</td>
-                  <td>{r.spec.sources?.length ?? 0}</td>
-                  <td>{r.spec.data?.length ?? 0}</td>
+                  <td>{r.spec?.sources?.length ?? 0}</td>
+                  <td>{r.spec?.data?.length ?? 0}</td>
                   <td><StatusLabel status={getReadyStatus(r.status?.conditions)} /></td>
                 </tr>
               ))}

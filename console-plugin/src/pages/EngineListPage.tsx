@@ -68,14 +68,16 @@ export default function EngineListPage() {
                     </td>
                     <td>{e.metadata?.namespace}</td>
                     <td>
-                      <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
-                        {e.spec.ruleSet.name}
-                      </Link>
+                      {e.spec?.ruleSet?.name ? (
+                        <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
+                          {e.spec.ruleSet.name}
+                        </Link>
+                      ) : '-'}
                     </td>
                     <td>
-                      {e.spec.target.type}{e.spec.target.name ? ` / ${e.spec.target.name}` : ''}
+                      {e.spec?.target?.type ?? '-'}{e.spec?.target?.name ? ` / ${e.spec.target.name}` : ''}
                     </td>
-                    <td>{e.spec.failurePolicy ?? 'fail'}</td>
+                    <td>{e.spec?.failurePolicy ?? 'fail'}</td>
                     <td><StatusLabel status={getReadyStatus(e.status?.conditions)} /></td>
                   </tr>
               ))}

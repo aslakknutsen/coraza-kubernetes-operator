@@ -46,8 +46,8 @@ export default function RuleSetDetailPage() {
     );
   }
 
-  const sources = ruleSet.spec.sources ?? [];
-  const data = ruleSet.spec.data ?? [];
+  const sources = ruleSet.spec?.sources ?? [];
+  const data = ruleSet.spec?.data ?? [];
 
   return (
     <>

@@ -36,8 +36,8 @@ export interface RuleSetReference {
 }
 
 export interface EngineSpec {
-  ruleSet: RuleSetReference;
-  target: EngineTarget;
+  ruleSet?: RuleSetReference;
+  target?: EngineTarget;
   failurePolicy?: string;
   ruleSetCacheServer?: RuleSetCacheServerConfig;
   driver?: DriverConfig;
@@ -48,7 +48,7 @@ export interface EngineStatus {
 }
 
 export interface EngineResource extends K8sResourceCommon {
-  spec: EngineSpec;
+  spec?: EngineSpec;
   status?: EngineStatus;
 }
 
@@ -74,7 +74,7 @@ export interface RuleSetStatus {
 }
 
 export interface RuleSetResource extends K8sResourceCommon {
-  spec: RuleSetSpec;
+  spec?: RuleSetSpec;
   status?: RuleSetStatus;
 }
 
