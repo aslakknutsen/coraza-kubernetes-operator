@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	crmetrics "github.com/networking-incubator/coraza-kubernetes-operator/internal/controller/metrics"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
 )
 
@@ -121,6 +122,7 @@ func (r *RuleSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, req.NamespacedName, &ruleset); err != nil {
 		if apierrors.IsNotFound(err) {
 			logDebug(log, req, "RuleSet", "Resource not found")
+			crmetrics.DeleteRuleSetMetrics(req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
 		logAPIError(log, req, "RuleSet", err, "Failed to GET", nil)
@@ -186,5 +188,6 @@ func (r *RuleSetReconciler) initializeStatus(ctx context.Context, log logr.Logge
 		return err
 	}
 	logConditionTransitions(log, req, "RuleSet", before, ruleset.Status.Conditions)
+	recordConditionMetrics("RuleSet", req.Namespace, req.Name, ruleset.Status.Conditions)
 	return nil
 }

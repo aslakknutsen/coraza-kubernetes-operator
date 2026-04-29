@@ -36,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	crmetrics "github.com/networking-incubator/coraza-kubernetes-operator/internal/controller/metrics"
 )
 
 // -----------------------------------------------------------------------------
@@ -248,6 +250,7 @@ func patchDegraded(
 		return err
 	}
 	logConditionTransitions(log, req, kind, before, *conditions)
+	recordConditionMetrics(kind, req.Namespace, req.Name, *conditions)
 	return nil
 }
 
@@ -282,6 +285,7 @@ func patchReady(
 		return err
 	}
 	logConditionTransitions(log, req, kind, before, *conditions)
+	recordConditionMetrics(kind, req.Namespace, req.Name, *conditions)
 	return nil
 }
 
@@ -408,6 +412,17 @@ func shouldSkipMissingFileError(err error, secretData map[string][]byte) bool {
 	}
 	_, exists := secretData[basename]
 	return exists
+}
+
+// recordConditionMetrics dispatches condition metric updates to the metrics
+// package based on the resource kind string used throughout the controllers.
+func recordConditionMetrics(kind, namespace, name string, conditions []metav1.Condition) {
+	switch kind {
+	case "Engine":
+		crmetrics.RecordEngineConditions(namespace, name, conditions)
+	case "RuleSet":
+		crmetrics.RecordRuleSetConditions(namespace, name, conditions)
+	}
 }
 
 // buildCacheReadyMessage constructs the Ready condition message after successful
