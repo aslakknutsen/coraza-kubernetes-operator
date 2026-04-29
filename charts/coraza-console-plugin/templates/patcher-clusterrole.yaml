@@ -1,0 +1,13 @@
+{{- if .Values.plugin.jobs.patchConsoles.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ template "coraza-console-plugin.patcherName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "coraza-console-plugin.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["operator.openshift.io"]
+    resources: ["consoles"]
+    verbs: ["get", "list", "patch", "update"]
+{{- end }}
