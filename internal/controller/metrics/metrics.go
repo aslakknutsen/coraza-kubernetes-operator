@@ -72,6 +72,8 @@ func init() {
 // RecordEngineInfo sets the coraza_engine_info gauge for the given Engine.
 // failurePolicy is the literal spec value (may be empty if user omitted it).
 func RecordEngineInfo(namespace, name, failurePolicy string) {
+	// Drop prior failure_policy label sets so a spec change cannot leave stale 1s.
+	engineInfo.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "name": name})
 	engineInfo.WithLabelValues(namespace, name, failurePolicy).Set(1)
 }
 

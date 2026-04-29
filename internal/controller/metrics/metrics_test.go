@@ -62,6 +62,19 @@ func TestRecordEngineInfo_EmptyFailurePolicy(t *testing.T) {
 	assert.Equal(t, float64(1), val)
 }
 
+func TestRecordEngineInfo_FailurePolicyChangeDoesNotLeaveStaleSeries(t *testing.T) {
+	resetMetrics(t)
+
+	RecordEngineInfo("ns", "eng", "fail")
+	assert.Equal(t, float64(1), testutil.ToFloat64(engineInfo.WithLabelValues("ns", "eng", "fail")))
+
+	RecordEngineInfo("ns", "eng", "allow")
+
+	assert.Equal(t, 1, testutil.CollectAndCount(engineInfo), "exactly one series per namespace/name")
+	assert.Equal(t, float64(1), testutil.ToFloat64(engineInfo.WithLabelValues("ns", "eng", "allow")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(engineInfo.WithLabelValues("ns", "eng", "fail")))
+}
+
 func TestRecordEngineConditions_Ready(t *testing.T) {
 	resetMetrics(t)
 
