@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -142,7 +143,7 @@ func TestIstioPrerequisites_Apply(t *testing.T) {
 	namespace := setupTestNamespace(t, ctx)
 	deploy := createDeployment(t, ctx, "test-op", namespace)
 
-	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op", namespace, "")
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op", namespace, "", 0)
 	log := ctrl.Log.WithName("test")
 	require.NoError(t, p.apply(ctx, log))
 
@@ -180,7 +181,7 @@ func TestIstioPrerequisites_ApplyIdempotent(t *testing.T) {
 	namespace := setupTestNamespace(t, ctx)
 	createDeployment(t, ctx, "test-op-idem", namespace)
 
-	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-idem", namespace, "")
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-idem", namespace, "", 0)
 	log := ctrl.Log.WithName("test-idempotent")
 
 	require.NoError(t, p.apply(ctx, log), "first apply")
@@ -192,7 +193,7 @@ func TestIstioPrerequisites_ApplyWithIstioRevision(t *testing.T) {
 	namespace := setupTestNamespace(t, ctx)
 	createDeployment(t, ctx, "test-op-rev", namespace)
 
-	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-rev", namespace, "canary")
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-rev", namespace, "canary", 0)
 	log := ctrl.Log.WithName("test-revision")
 	require.NoError(t, p.apply(ctx, log))
 
@@ -210,7 +211,7 @@ func TestIstioPrerequisites_ApplyDeploymentNotFound(t *testing.T) {
 	ctx := context.Background()
 	namespace := setupTestNamespace(t, ctx)
 
-	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "")
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "", 0)
 	log := ctrl.Log.WithName("test-not-found")
 	err := p.apply(ctx, log)
 	require.Error(t, err)
@@ -221,9 +222,235 @@ func TestIstioPrerequisites_StartReturnsNilOnError(t *testing.T) {
 	ctx := context.Background()
 	namespace := setupTestNamespace(t, ctx)
 
-	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "")
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "", 0)
 	err := p.Start(ctx)
 	assert.NoError(t, err, "Start() must return nil even when apply fails")
+}
+
+func TestIstioPrerequisites_PeriodicReapply(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-periodic", namespace)
+
+	interval := 50 * time.Millisecond
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-periodic", namespace, "", interval)
+
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	resourceName := "test-op-periodic-ruleset-cache"
+
+	// Wait for the initial apply to create the ServiceEntry.
+	require.Eventually(t, func() bool {
+		se := &unstructured.Unstructured{}
+		se.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		return k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, se) == nil
+	}, 2*time.Second, 10*time.Millisecond, "ServiceEntry should exist after initial apply")
+
+	// Delete the ServiceEntry and verify it gets re-created by the periodic loop.
+	se := &unstructured.Unstructured{}
+	se.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+	})
+	se.SetName(resourceName)
+	se.SetNamespace(namespace)
+	require.NoError(t, k8sClient.Delete(ctx, se))
+
+	require.Eventually(t, func() bool {
+		check := &unstructured.Unstructured{}
+		check.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		return k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, check) == nil
+	}, 2*time.Second, 10*time.Millisecond, "ServiceEntry should be re-created by periodic reconciliation")
+
+	cancel()
+	require.NoError(t, <-done, "Start should return nil on context cancellation")
+}
+
+func TestIstioPrerequisites_StartBlocksUntilCancelled(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-block", namespace)
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-block", namespace, "", 100*time.Millisecond)
+
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	// Start should not return while context is active.
+	select {
+	case err := <-done:
+		t.Fatalf("Start returned prematurely: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after context cancellation")
+	}
+}
+
+func TestIstioPrerequisites_ZeroIntervalReturnsImmediately(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "", 0)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err, "Start with interval=0 should return nil immediately")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start with interval=0 should return immediately, not block")
+	}
+}
+
+func TestIstioPrerequisites_NegativeIntervalDisablesPeriodic(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+
+	// reconcileInterval <= 0 must disable the ticker loop (same as zero).
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "no-such-deploy", namespace, "", -1*time.Second)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start with negative interval should return immediately, not block")
+	}
+}
+
+func TestIstioPrerequisites_PeriodicStartSurvivesMissingDeployment(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "missing-deploy", namespace, "", 40*time.Millisecond)
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	// Several ticks: apply keeps failing but Start must not exit or return a non-nil error.
+	time.Sleep(150 * time.Millisecond)
+
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err, "Start must return nil on cancel even when apply never succeeds")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after context cancellation")
+	}
+}
+
+func TestIstioPrerequisites_PeriodicReapplyCorrectsSpecDrift(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-drift", namespace)
+
+	interval := 50 * time.Millisecond
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-drift", namespace, "", interval)
+
+	startCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	resourceName := "test-op-drift-ruleset-cache"
+	require.Eventually(t, func() bool {
+		se := &unstructured.Unstructured{}
+		se.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		return k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, se) == nil
+	}, 2*time.Second, 10*time.Millisecond, "initial ServiceEntry must exist")
+
+	se := &unstructured.Unstructured{}
+	se.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+	})
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{
+		Name: resourceName, Namespace: namespace,
+	}, se))
+
+	// Simulate an admin mutating operator-managed fields; next SSA tick should revert.
+	require.NoError(t, unstructured.SetNestedField(se.Object, "MESH_EXTERNAL", "spec", "location"))
+	require.NoError(t, k8sClient.Update(ctx, se))
+
+	require.Eventually(t, func() bool {
+		check := &unstructured.Unstructured{}
+		check.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+		})
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Name: resourceName, Namespace: namespace,
+		}, check); err != nil {
+			return false
+		}
+		loc, found, err := unstructured.NestedString(check.Object, "spec", "location")
+		return err == nil && found && loc == "MESH_INTERNAL"
+	}, 3*time.Second, 20*time.Millisecond, "periodic SSA should restore spec.location after drift")
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
+func TestIstioPrerequisites_PeriodicLoopSurvivesMultipleTicks(t *testing.T) {
+	ctx := context.Background()
+	namespace := setupTestNamespace(t, ctx)
+	createDeployment(t, ctx, "test-op-count", namespace)
+
+	p := NewIstioPrerequisites(k8sClient, k8sClient, "test-op-count", namespace, "", 30*time.Millisecond)
+
+	startCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Start(startCtx)
+	}()
+
+	// Wait long enough for multiple periodic ticks to fire.
+	time.Sleep(120 * time.Millisecond)
+
+	// Verify resources exist (proves apply ran without crashing the loop).
+	resourceName := "test-op-count-ruleset-cache"
+	se := &unstructured.Unstructured{}
+	se.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "networking.istio.io", Version: "v1", Kind: "ServiceEntry",
+	})
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{
+		Name: resourceName, Namespace: namespace,
+	}, se))
+
+	cancel()
+	require.NoError(t, <-done)
 }
 
 // -----------------------------------------------------------------------------
