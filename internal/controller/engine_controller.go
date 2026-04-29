@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
+	crmetrics "github.com/networking-incubator/coraza-kubernetes-operator/internal/controller/metrics"
 )
 
 // -----------------------------------------------------------------------------
@@ -136,6 +137,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err := r.Get(ctx, req.NamespacedName, &engine); err != nil {
 		if apierrors.IsNotFound(err) {
 			logDebug(log, req, "Engine", "Resource not found")
+			crmetrics.DeleteEngineMetrics(req.Namespace, req.Name)
 			// Best-effort cleanup: remove any orphaned NetworkPolicy that may
 			// remain if the Engine was deleted before the finalizer was added
 			// (e.g., race during upgrade or legacy Engine without finalizer).
@@ -167,6 +169,8 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 	}
 
+	crmetrics.RecordEngineInfo(engine.Namespace, engine.Name, string(engine.Spec.FailurePolicy))
+
 	logDebug(log, req, "Engine", "Applying conditions")
 	if engine.Status == nil {
 		engine.Status = &wafv1alpha1.EngineStatus{}
@@ -180,6 +184,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 		logConditionTransitions(log, req, "Engine", before, engine.Status.Conditions)
+		recordConditionMetrics("Engine", req.Namespace, req.Name, engine.Status.Conditions)
 	}
 
 	logDebug(log, req, "Engine", "Checking referenced RuleSet status")
