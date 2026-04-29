@@ -114,11 +114,11 @@ export default function EngineDetailPage() {
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
-              {engine.spec?.ruleSetCacheServer && (
+              {engine.spec?.ruleSetCacheServer != null && (
                 <DescriptionListGroup>
                   <DescriptionListTerm>Poll Interval</DescriptionListTerm>
                   <DescriptionListDescription>
-                    {engine.spec.ruleSetCacheServer.pollIntervalSeconds}s
+                    {engine.spec.ruleSetCacheServer.pollIntervalSeconds ?? 15}s
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}

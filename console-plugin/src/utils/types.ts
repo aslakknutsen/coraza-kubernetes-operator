@@ -28,7 +28,7 @@ export interface DriverConfig {
 }
 
 export interface RuleSetCacheServerConfig {
-  pollIntervalSeconds: number;
+  pollIntervalSeconds?: number;
 }
 
 export interface RuleSetReference {

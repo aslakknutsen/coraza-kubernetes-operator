@@ -48,6 +48,16 @@ export default function OverviewPage() {
   const engineList = engines ?? [];
   const ruleSetList = ruleSets ?? [];
 
+  type TaggedResource = { kind: string; resource: EngineResource | RuleSetResource };
+  const allResources: TaggedResource[] = [
+    ...engineList.map((e) => ({ kind: 'Engine' as const, resource: e })),
+    ...ruleSetList.map((r) => ({ kind: 'RuleSet' as const, resource: r })),
+  ].sort((a, b) => {
+    const ta = a.resource.metadata?.creationTimestamp ?? '';
+    const tb = b.resource.metadata?.creationTimestamp ?? '';
+    return tb.localeCompare(ta);
+  });
+
   return (
     <>
       <PageSection>
@@ -77,7 +87,7 @@ export default function OverviewPage() {
         <Card>
           <CardTitle>Recent Resources</CardTitle>
           <CardBody>
-            {engineList.length === 0 && ruleSetList.length === 0 ? (
+            {allResources.length === 0 ? (
               <EmptyState>
                 <EmptyStateBody>No Coraza resources found in this namespace.</EmptyStateBody>
               </EmptyState>
@@ -92,30 +102,25 @@ export default function OverviewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {engineList.map((e) => (
-                    <tr key={`engine-${e.metadata?.namespace}-${e.metadata?.name}`}>
-                      <td>Engine</td>
-                      <td>
-                        <Link to={`/coraza/engines/${e.metadata?.name}?ns=${e.metadata?.namespace}`}>
-                          {e.metadata?.name}
-                        </Link>
-                      </td>
-                      <td>{e.metadata?.namespace}</td>
-                      <td><StatusLabel status={getReadyStatus(e.status?.conditions)} /></td>
-                    </tr>
-                  ))}
-                  {ruleSetList.map((r) => (
-                    <tr key={`ruleset-${r.metadata?.namespace}-${r.metadata?.name}`}>
-                      <td>RuleSet</td>
-                      <td>
-                        <Link to={`/coraza/rulesets/${r.metadata?.name}?ns=${r.metadata?.namespace}`}>
-                          {r.metadata?.name}
-                        </Link>
-                      </td>
-                      <td>{r.metadata?.namespace}</td>
-                      <td><StatusLabel status={getReadyStatus(r.status?.conditions)} /></td>
-                    </tr>
-                  ))}
+                  {allResources.map(({ kind, resource: r }) => {
+                    const route = kind === 'Engine' ? 'engines' : 'rulesets';
+                    const status = getReadyStatus(
+                      (r as EngineResource).status?.conditions ??
+                      (r as RuleSetResource).status?.conditions,
+                    );
+                    return (
+                      <tr key={`${kind}-${r.metadata?.namespace}-${r.metadata?.name}`}>
+                        <td>{kind}</td>
+                        <td>
+                          <Link to={`/coraza/${route}/${r.metadata?.name}?ns=${r.metadata?.namespace}`}>
+                            {r.metadata?.name}
+                          </Link>
+                        </td>
+                        <td>{r.metadata?.namespace}</td>
+                        <td><StatusLabel status={status} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

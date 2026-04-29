@@ -37,8 +37,8 @@ export const ConditionsTable: React.FC<ConditionsTableProps> = ({ conditions }) 
         </tr>
       </thead>
       <tbody>
-        {conditions.map((c) => (
-          <tr key={c.type}>
+        {conditions.map((c, i) => (
+          <tr key={`${c.type}-${i}`}>
             <td>{c.type}</td>
             <td>{conditionStatusLabel(c.status)}</td>
             <td>{c.reason ?? '-'}</td>
