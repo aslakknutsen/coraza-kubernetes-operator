@@ -18,10 +18,12 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
@@ -158,4 +160,83 @@ func TestWithRequestLogger_FromContextLoggerWithoutRequestID(t *testing.T) {
 	assert.Contains(t, joined, "suite")
 	assert.Contains(t, joined, "qa")
 	assert.Contains(t, joined, "requestID")
+}
+
+// TestWithRequestLogger_WhitespaceRequestIDIsForwardedVerbatim documents that a
+// whitespace-only X-Request-ID is treated as present (not regenerated). Product
+// may later trim; this locks current behavior for reviewers.
+func TestWithRequestLogger_WhitespaceRequestIDIsForwardedVerbatim(t *testing.T) {
+	cache := NewRuleSetCache()
+	var lines []string
+	server := NewServer(cache, ":0", captureLogger(&lines), nil, newNoopTokenReview())
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := loggerFromContext(r.Context(), server.logger)
+		log.Info("inner")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	h := server.withRequestLogger(inner)
+	req := httptest.NewRequest(http.MethodGet, "/rules/x", nil)
+	req.Header.Set("X-Request-ID", "   \t  ")
+	recorder := httptest.NewRecorder()
+	h.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	joined := strings.Join(lines, "\n")
+	assert.Contains(t, joined, "requestID")
+	assert.Contains(t, joined, "inner")
+	// funcr renders the tab from the header as a literal \t in the log line (not a rune tab).
+	assert.Contains(t, joined, "   \\t  ")
+}
+
+// TestProductionHandlerChain_AuthFailureLogsRequestID exercises the same HTTP
+// stack as production (metrics + mux + request logger + handleRules). Auth
+// failures must still correlate via requestID.
+func TestProductionHandlerChain_AuthFailureLogsRequestID(t *testing.T) {
+	cache := NewRuleSetCache()
+	var lines []string
+	s := NewServer(cache, ":0", captureLogger(&lines), nil, testTokenReview())
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/rules/default/test-instance", nil)
+	req.Header.Set("X-Request-ID", "qa-req-auth-1")
+	rec := httptest.NewRecorder()
+	s.srv.Handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	joined := strings.Join(lines, "\n")
+	assert.Contains(t, joined, "qa-req-auth-1")
+	assert.Contains(t, joined, "requestID")
+	assert.Contains(t, joined, "Authentication failed")
+}
+
+// TestRuleSetCacheServer_StartUsesLoggerFromContext ensures Start/rungc resolve
+// the logger from ctx when embedded (not only the constructor fallback).
+func TestRuleSetCacheServer_StartUsesLoggerFromContext(t *testing.T) {
+	cache := NewRuleSetCache()
+	var primaryLines, fallbackLines []string
+	primaryLog := captureLogger(&primaryLines)
+	fallbackLog := captureLogger(&fallbackLines)
+	ctx, cancel := context.WithCancel(logr.NewContext(context.Background(), primaryLog))
+	s := NewServer(cache, ":0", fallbackLog, nil, newNoopTokenReview())
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- s.Start(ctx) }()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			require.NoError(t, err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start did not return after cancel")
+	}
+
+	joined := strings.Join(primaryLines, "\n")
+	assert.Contains(t, joined, "Starting ruleset cache server")
+	assert.Contains(t, joined, "Shutting down ruleset cache server")
+	require.Empty(t, fallbackLines, "fallback logger must not receive logs when ctx carries a logger")
 }
