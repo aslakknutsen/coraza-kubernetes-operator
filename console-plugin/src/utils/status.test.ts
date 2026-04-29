@@ -47,4 +47,13 @@ describe('getReadyStatus', () => {
       getReadyStatus([{ type: 'Ready', status: 'Unknown' }]),
     ).toBe('Unknown');
   });
+
+  it('uses the first Ready row when duplicates exist (malformed API)', () => {
+    expect(
+      getReadyStatus([
+        { type: 'Ready', status: 'False', reason: 'Progressing' },
+        { type: 'Ready', status: 'True' },
+      ]),
+    ).toBe('Progressing');
+  });
 });
