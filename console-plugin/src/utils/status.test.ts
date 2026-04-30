@@ -15,6 +15,15 @@ describe('getReadyCondition', () => {
     ];
     expect(getReadyCondition(conditions)?.type).toBe('Ready');
   });
+
+  it('returns the first Ready row when duplicates exist (malformed API)', () => {
+    const conditions: Condition[] = [
+      { type: 'Ready', status: 'False', reason: 'Progressing' },
+      { type: 'Ready', status: 'True' },
+    ];
+    expect(getReadyCondition(conditions)?.status).toBe('False');
+    expect(getReadyCondition(conditions)?.reason).toBe('Progressing');
+  });
 });
 
 describe('getReadyStatus', () => {
