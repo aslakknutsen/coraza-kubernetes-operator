@@ -89,7 +89,7 @@ jobs:
         with:
           python-version: "3.13.12"
       - name: install python dependencies
-        run: pip install PyYAML==6.0.3
+        run: pip install -r hack/requirements.txt
       - name: set up helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
@@ -188,6 +188,7 @@ jobs:
   conformance-tests:
     name: Coreruleset conformance test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build]
     steps:
       - name: checkout code
@@ -242,6 +243,7 @@ jobs:
   integration-tests:
     name: integration tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [lint, build]
     steps:
       - name: checkout code
@@ -273,7 +275,7 @@ jobs:
           python-version: "3.13.12"
 
       - name: install python dependencies
-        run: pip install PyYAML==6.0.3
+        run: pip install -r hack/requirements.txt
 
       - name: install kubectl
         uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0

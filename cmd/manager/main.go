@@ -241,6 +241,7 @@ func buildCacheOptions(operatorNamespace string) ctrlcache.Options {
 
 func setupCacheServer(mgr ctrl.Manager, cfg config, kubeClient *kubernetes.Clientset) *cache.RuleSetCache {
 	rulesetCache := cache.NewRuleSetCache()
+	rulesetCache.SetLogger(ctrl.Log.WithName("ruleset-cache"))
 	gcConfig := &cache.GarbageCollectionConfig{
 		GCInterval: cfg.cacheGCInterval,
 		MaxAge:     cfg.cacheMaxAge,
