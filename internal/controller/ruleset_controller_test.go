@@ -1338,3 +1338,125 @@ func TestRuleSetReconciler_RuleDataStatusLoaded(t *testing.T) {
 	assert.Equal(t, metav1.ConditionTrue, ready.Status)
 	assert.Equal(t, "Loaded", ready.Reason)
 }
+
+func TestRuleSetReconciler_RuleSourceStatusRecoversAfterRulesFixed(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	validBuddy := utils.NewTestRuleSource("status-recover-buddy", testNamespace, "SecCollectionTimeout 1")
+	require.NoError(t, k8sClient.Create(ctx, validBuddy))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, validBuddy) })
+
+	rs := utils.NewTestRuleSource("status-recover-src", testNamespace,
+		"SecDefaultActionXPTO \"INVALID\"")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-recover-ruleset",
+		Namespace: testNamespace,
+		Sources: []wafv1alpha1.SourceReference{
+			{Name: "status-recover-buddy"},
+			{Name: "status-recover-src"},
+		},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	// Aggregate validation still fails when any fragment is invalid; fragment status is patched first.
+	_, _ = reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, rs))
+	degraded := apimeta.FindStatusCondition(rs.Status.Conditions, "Degraded")
+	require.NotNil(t, degraded)
+	assert.Equal(t, metav1.ConditionTrue, degraded.Status)
+
+	var updated wafv1alpha1.RuleSource
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, &updated))
+	updated.Spec.Rules = `SecRule REQUEST_URI "@contains /ok" "id:1,phase:1,pass,nolog"`
+	require.NoError(t, k8sClient.Update(ctx, &updated))
+
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, rs))
+	ready := apimeta.FindStatusCondition(rs.Status.Conditions, "Ready")
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.Equal(t, "Validated", ready.Reason)
+	assert.Equal(t, rs.Generation, ready.ObservedGeneration)
+
+	degradedAfter := apimeta.FindStatusCondition(rs.Status.Conditions, "Degraded")
+	assert.Nil(t, degradedAfter)
+}
+
+func TestRuleSetReconciler_RuleDataStatusRefreshesAfterSpecUpdate(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	rd := utils.NewTestRuleData("status-data-refresh", testNamespace, map[string]string{
+		"refresh.data": "one",
+	})
+	require.NoError(t, k8sClient.Create(ctx, rd))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rd) })
+
+	rs := utils.NewTestRuleSource("status-data-refresh-src", testNamespace,
+		`SecRule ARGS "@pmFromFile refresh.data" "id:88888,phase:1,pass,nolog"`)
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-data-refresh-ruleset",
+		Namespace: testNamespace,
+		Sources:   []wafv1alpha1.SourceReference{{Name: "status-data-refresh-src"}},
+		Data:      []wafv1alpha1.DataReference{{Name: "status-data-refresh"}},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rd.Name, Namespace: rd.Namespace}, rd))
+	gen1 := rd.Generation
+	ready1 := apimeta.FindStatusCondition(rd.Status.Conditions, "Ready")
+	require.NotNil(t, ready1)
+	assert.Equal(t, gen1, ready1.ObservedGeneration)
+
+	var updatedRD wafv1alpha1.RuleData
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rd.Name, Namespace: rd.Namespace}, &updatedRD))
+	updatedRD.Spec.Files["refresh.data"] = "two"
+	require.NoError(t, k8sClient.Update(ctx, &updatedRD))
+
+	_, err = reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rd.Name, Namespace: rd.Namespace}, rd))
+	gen2 := rd.Generation
+	require.Greater(t, gen2, gen1, "RuleData generation should bump after spec update")
+	ready2 := apimeta.FindStatusCondition(rd.Status.Conditions, "Ready")
+	require.NotNil(t, ready2)
+	assert.Equal(t, gen2, ready2.ObservedGeneration)
+	assert.Equal(t, metav1.ConditionTrue, ready2.Status)
+	assert.Equal(t, "Loaded", ready2.Reason)
+}
