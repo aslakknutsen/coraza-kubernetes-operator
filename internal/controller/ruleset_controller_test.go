@@ -1166,3 +1166,175 @@ func TestRuleSetReconciler_DuplicateDataReferences(t *testing.T) {
 	assert.True(t, recorder.HasEvent("Warning", "DuplicateReference"),
 		"expected Warning/DuplicateReference event; got: %v", recorder.Events)
 }
+
+// ---------------------------------------------------------------------------
+// Fragment Status Tests — RuleSource and RuleData status subresources
+// ---------------------------------------------------------------------------
+
+func TestRuleSetReconciler_RuleSourceStatusValidated(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	rs := utils.NewTestRuleSource("status-valid-src", testNamespace,
+		"SecRule REQUEST_URI \"@contains /test\" \"id:1,phase:1,pass,nolog\"")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-valid-ruleset",
+		Namespace: testNamespace,
+		Sources:   []wafv1alpha1.SourceReference{{Name: "status-valid-src"}},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, rs))
+	ready := apimeta.FindStatusCondition(rs.Status.Conditions, "Ready")
+	require.NotNil(t, ready, "RuleSource should have Ready condition after successful validation")
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.Equal(t, "Validated", ready.Reason)
+
+	degraded := apimeta.FindStatusCondition(rs.Status.Conditions, "Degraded")
+	assert.Nil(t, degraded, "Degraded should not be set for valid RuleSource")
+}
+
+func TestRuleSetReconciler_RuleSourceStatusInvalidRules(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	validSrc := utils.NewTestRuleSource("status-ok-src", testNamespace, "SecCollectionTimeout 1")
+	require.NoError(t, k8sClient.Create(ctx, validSrc))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, validSrc) })
+
+	invalidSrc := utils.NewTestRuleSource("status-bad-src", testNamespace,
+		"SecDefaultActionXPTO \"INVALID\"")
+	require.NoError(t, k8sClient.Create(ctx, invalidSrc))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, invalidSrc) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-invalid-ruleset",
+		Namespace: testNamespace,
+		Sources: []wafv1alpha1.SourceReference{
+			{Name: "status-ok-src"},
+			{Name: "status-bad-src"},
+		},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, _ = reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: "status-ok-src", Namespace: testNamespace}, validSrc))
+	validReady := apimeta.FindStatusCondition(validSrc.Status.Conditions, "Ready")
+	require.NotNil(t, validReady, "valid RuleSource should be Ready")
+	assert.Equal(t, metav1.ConditionTrue, validReady.Status)
+	assert.Equal(t, "Validated", validReady.Reason)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: "status-bad-src", Namespace: testNamespace}, invalidSrc))
+	degraded := apimeta.FindStatusCondition(invalidSrc.Status.Conditions, "Degraded")
+	require.NotNil(t, degraded, "invalid RuleSource should be Degraded")
+	assert.Equal(t, metav1.ConditionTrue, degraded.Status)
+	assert.Equal(t, "InvalidRules", degraded.Reason)
+
+	badReady := apimeta.FindStatusCondition(invalidSrc.Status.Conditions, "Ready")
+	require.NotNil(t, badReady)
+	assert.Equal(t, metav1.ConditionFalse, badReady.Status)
+}
+
+func TestRuleSetReconciler_RuleSourceStatusValidationSkipped(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	rs := utils.NewTestRuleSource("status-skip-src", testNamespace, "SecCollectionTimeout 1")
+	rs.Annotations = map[string]string{
+		wafv1alpha1.AnnotationSkipValidation: "false",
+	}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-skip-ruleset",
+		Namespace: testNamespace,
+		Sources:   []wafv1alpha1.SourceReference{{Name: "status-skip-src"}},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rs.Name, Namespace: rs.Namespace}, rs))
+	ready := apimeta.FindStatusCondition(rs.Status.Conditions, "Ready")
+	require.NotNil(t, ready, "RuleSource with skipped validation should be Ready")
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.Equal(t, "ValidationSkipped", ready.Reason)
+}
+
+func TestRuleSetReconciler_RuleDataStatusLoaded(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	rd := utils.NewTestRuleData("status-data", testNamespace, map[string]string{
+		"test.data": "alpha\nbravo",
+	})
+	require.NoError(t, k8sClient.Create(ctx, rd))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rd) })
+
+	rs := utils.NewTestRuleSource("status-data-src", testNamespace,
+		`SecRule ARGS "@pmFromFile test.data" "id:99999,phase:1,pass,nolog"`)
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "status-data-ruleset",
+		Namespace: testNamespace,
+		Sources:   []wafv1alpha1.SourceReference{{Name: "status-data-src"}},
+		Data:      []wafv1alpha1.DataReference{{Name: "status-data"}},
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ruleSet) })
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewTestRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: rd.Name, Namespace: rd.Namespace}, rd))
+	ready := apimeta.FindStatusCondition(rd.Status.Conditions, "Ready")
+	require.NotNil(t, ready, "RuleData should have Ready condition after successful load")
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.Equal(t, "Loaded", ready.Reason)
+}
