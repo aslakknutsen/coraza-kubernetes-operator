@@ -1,0 +1,5 @@
+apiVersion: v2
+name: coraza-console-plugin
+description: OpenShift Console plugin for managing Coraza WAF resources
+type: application
+version: 0.1.0

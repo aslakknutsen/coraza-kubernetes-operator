@@ -92,3 +92,8 @@ tools/github_project_manager/github_project_manager
 /kubectl-coraza
 
 !design/**/*.md
+
+# console plugin
+console-plugin/node_modules/
+console-plugin/dist/
+!console-plugin/*.md
