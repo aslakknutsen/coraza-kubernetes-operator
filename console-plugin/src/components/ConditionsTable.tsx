@@ -1,7 +1,5 @@
 import * as React from 'react';
 import { Condition } from '../utils/types';
-import { StatusLabel } from './StatusLabel';
-import { ReadyStatus } from '../utils/status';
 
 interface ConditionsTableProps {
   conditions: Condition[];
@@ -25,11 +23,7 @@ export const ConditionsTable: React.FC<ConditionsTableProps> = ({ conditions }) 
         {conditions.map((c) => (
           <tr key={c.type}>
             <td>{c.type}</td>
-            <td>
-              <StatusLabel
-                status={c.status === 'True' ? 'Ready' : c.status === 'False' ? 'Not Ready' : 'Unknown' as ReadyStatus}
-              />
-            </td>
+            <td>{c.status}</td>
             <td>{c.reason ?? '-'}</td>
             <td>{c.message ?? '-'}</td>
             <td>{c.lastTransitionTime ?? '-'}</td>

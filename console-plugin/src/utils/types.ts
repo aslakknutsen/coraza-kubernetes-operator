@@ -1,12 +1,25 @@
 import { K8sResourceCommon } from '@openshift-console/dynamic-plugin-sdk';
 
-export interface RuleSourceReference {
+export interface Condition {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  lastTransitionTime?: string;
+  observedGeneration?: number;
+}
+
+export interface SourceReference {
+  name: string;
+}
+
+export interface DataReference {
   name: string;
 }
 
 export interface RuleSetSpec {
-  rules: RuleSourceReference[];
-  ruleData?: string;
+  sources: SourceReference[];
+  data?: DataReference[];
 }
 
 export interface RuleSetStatus {
@@ -19,35 +32,35 @@ export interface RuleSetResource extends K8sResourceCommon {
 }
 
 export interface RuleSetCacheServerConfig {
-  pollIntervalSeconds: number;
+  pollIntervalSeconds?: number;
 }
 
-export interface IstioWasmConfig {
-  mode: string;
-  image: string;
-  workloadSelector?: {
-    matchLabels?: Record<string, string>;
-  };
-  ruleSetCacheServer?: RuleSetCacheServerConfig;
+export interface EngineTarget {
+  type: string;
+  name: string;
+  provider?: string;
 }
 
-export interface IstioDriverConfig {
-  wasm?: IstioWasmConfig;
+export interface WasmDriverConfig {
+  image?: string;
+  imagePullSecret?: string;
 }
 
 export interface DriverConfig {
-  istio?: IstioDriverConfig;
+  type?: string;
+  wasm?: WasmDriverConfig;
 }
 
 export interface EngineSpec {
   ruleSet: { name: string };
-  driver: DriverConfig;
-  failurePolicy: string;
+  target: EngineTarget;
+  failurePolicy?: string;
+  ruleSetCacheServer?: RuleSetCacheServerConfig;
+  driver?: DriverConfig;
 }
 
 export interface EngineStatus {
   conditions?: Condition[];
-  gateways?: { name: string }[];
 }
 
 export interface EngineResource extends K8sResourceCommon {
@@ -55,10 +68,28 @@ export interface EngineResource extends K8sResourceCommon {
   status?: EngineStatus;
 }
 
-export interface Condition {
-  type: string;
-  status: string;
-  reason?: string;
-  message?: string;
-  lastTransitionTime?: string;
+export interface RuleSourceSpec {
+  rules: string;
+}
+
+export interface RuleSourceStatus {
+  conditions?: Condition[];
+}
+
+export interface RuleSourceResource extends K8sResourceCommon {
+  spec: RuleSourceSpec;
+  status?: RuleSourceStatus;
+}
+
+export interface RuleDataSpec {
+  files: Record<string, string>;
+}
+
+export interface RuleDataStatus {
+  conditions?: Condition[];
+}
+
+export interface RuleDataResource extends K8sResourceCommon {
+  spec: RuleDataSpec;
+  status?: RuleDataStatus;
 }

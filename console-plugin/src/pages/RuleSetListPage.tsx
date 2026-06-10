@@ -13,7 +13,7 @@ import {
 } from '@patternfly/react-core';
 import { RuleSetResource } from '../utils/types';
 import { RuleSetModel } from '../utils/model';
-import { getReadyStatus } from '../utils/status';
+import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 
 export default function RuleSetListPage() {
@@ -52,8 +52,8 @@ export default function RuleSetListPage() {
               <tr>
                 <th>Name</th>
                 <th>Namespace</th>
-                <th>Rule Sources</th>
-                <th>Rule Data</th>
+                <th>Sources</th>
+                <th>Data</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -66,9 +66,9 @@ export default function RuleSetListPage() {
                     </Link>
                   </td>
                   <td>{r.metadata?.namespace}</td>
-                  <td>{r.spec.rules?.length ?? 0}</td>
-                  <td>{r.spec.ruleData ? <code>{r.spec.ruleData}</code> : '—'}</td>
-                  <td><StatusLabel status={getReadyStatus(r.status?.conditions)} /></td>
+                  <td>{r.spec.sources?.length ?? 0}</td>
+                  <td>{r.spec.data?.length ?? 0}</td>
+                  <td><StatusLabel status={getResourceStatus(r.status?.conditions)} /></td>
                 </tr>
               ))}
             </tbody>

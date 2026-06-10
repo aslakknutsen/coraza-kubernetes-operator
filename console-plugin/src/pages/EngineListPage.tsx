@@ -13,7 +13,7 @@ import {
 } from '@patternfly/react-core';
 import { EngineResource } from '../utils/types';
 import { EngineModel } from '../utils/model';
-import { getReadyStatus } from '../utils/status';
+import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 
 export default function EngineListPage() {
@@ -53,29 +53,33 @@ export default function EngineListPage() {
                 <th>Name</th>
                 <th>Namespace</th>
                 <th>RuleSet</th>
+                <th>Target</th>
                 <th>Failure Policy</th>
-                <th>Gateways</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {items.map((e) => (
-                  <tr key={`${e.metadata?.namespace}-${e.metadata?.name}`}>
-                    <td>
-                      <Link to={`/coraza/engines/${e.metadata?.name}?ns=${e.metadata?.namespace}`}>
-                        {e.metadata?.name}
-                      </Link>
-                    </td>
-                    <td>{e.metadata?.namespace}</td>
-                    <td>
-                      <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
-                        {e.spec.ruleSet.name}
-                      </Link>
-                    </td>
-                    <td>{e.spec.failurePolicy}</td>
-                    <td>{e.status?.gateways?.length ?? 0}</td>
-                    <td><StatusLabel status={getReadyStatus(e.status?.conditions)} /></td>
-                  </tr>
+                <tr key={`${e.metadata?.namespace}-${e.metadata?.name}`}>
+                  <td>
+                    <Link to={`/coraza/engines/${e.metadata?.name}?ns=${e.metadata?.namespace}`}>
+                      {e.metadata?.name}
+                    </Link>
+                  </td>
+                  <td>{e.metadata?.namespace}</td>
+                  <td>
+                    <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
+                      {e.spec.ruleSet.name}
+                    </Link>
+                  </td>
+                  <td>{e.spec.target?.name ?? '—'}</td>
+                  <td>{e.spec.failurePolicy ?? '—'}</td>
+                  <td>
+                    <StatusLabel
+                      status={getResourceStatus(e.status?.conditions, { checkAccepted: true })}
+                    />
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

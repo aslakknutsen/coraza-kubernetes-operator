@@ -5,18 +5,21 @@ import {
   ExclamationCircleIcon,
   InProgressIcon,
   UnknownIcon,
+  BanIcon,
 } from '@patternfly/react-icons';
-import { ReadyStatus } from '../utils/status';
+import { ResourceStatus } from '../utils/status';
 
-const statusConfig: Record<ReadyStatus, { color: 'green' | 'red' | 'blue' | 'grey'; icon: React.ReactElement }> = {
+const statusConfig: Record<ResourceStatus, { color: 'green' | 'red' | 'blue' | 'grey' | 'orange'; icon: React.ReactElement }> = {
   Ready: { color: 'green', icon: <CheckCircleIcon /> },
   'Not Ready': { color: 'red', icon: <ExclamationCircleIcon /> },
   Progressing: { color: 'blue', icon: <InProgressIcon /> },
+  Degraded: { color: 'red', icon: <ExclamationCircleIcon /> },
+  Rejected: { color: 'orange', icon: <BanIcon /> },
   Unknown: { color: 'grey', icon: <UnknownIcon /> },
 };
 
 interface StatusLabelProps {
-  status: ReadyStatus;
+  status: ResourceStatus;
 }
 
 export const StatusLabel: React.FC<StatusLabelProps> = ({ status }) => {

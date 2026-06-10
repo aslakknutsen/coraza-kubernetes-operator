@@ -53,13 +53,17 @@
     "name": "coraza-console-plugin",
     "version": "0.0.1",
     "displayName": "Coraza WAF Console",
-    "description": "Manage Coraza WAF Engines and RuleSets from the OpenShift Console.",
+    "description": "Manage Coraza WAF resources from the OpenShift Console.",
     "exposedModules": {
       "OverviewPage": "./pages/OverviewPage",
       "EngineListPage": "./pages/EngineListPage",
       "EngineDetailPage": "./pages/EngineDetailPage",
       "RuleSetListPage": "./pages/RuleSetListPage",
-      "RuleSetDetailPage": "./pages/RuleSetDetailPage"
+      "RuleSetDetailPage": "./pages/RuleSetDetailPage",
+      "RuleSourceListPage": "./pages/RuleSourceListPage",
+      "RuleSourceDetailPage": "./pages/RuleSourceDetailPage",
+      "RuleDataListPage": "./pages/RuleDataListPage",
+      "RuleDataDetailPage": "./pages/RuleDataDetailPage"
     },
     "dependencies": {
       "@console/pluginAPI": "*"

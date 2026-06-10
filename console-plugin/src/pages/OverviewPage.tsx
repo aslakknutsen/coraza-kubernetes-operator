@@ -16,9 +16,9 @@ import {
   EmptyState,
   EmptyStateBody,
 } from '@patternfly/react-core';
-import { EngineResource, RuleSetResource } from '../utils/types';
-import { EngineModel, RuleSetModel } from '../utils/model';
-import { getReadyStatus } from '../utils/status';
+import { EngineResource, RuleSetResource, RuleSourceResource, RuleDataResource } from '../utils/types';
+import { EngineModel, RuleSetModel, RuleSourceModel, RuleDataModel } from '../utils/model';
+import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 
 export default function OverviewPage() {
@@ -37,7 +37,27 @@ export default function OverviewPage() {
     namespace: ns,
   });
 
-  if (!enginesLoaded || !ruleSetsLoaded) {
+  const [ruleSources, ruleSourcesLoaded] = useK8sWatchResource<RuleSourceResource[]>({
+    groupVersionKind: {
+      group: RuleSourceModel.apiGroup!,
+      version: RuleSourceModel.apiVersion,
+      kind: RuleSourceModel.kind,
+    },
+    isList: true,
+    namespace: ns,
+  });
+
+  const [ruleDataList, ruleDataLoaded] = useK8sWatchResource<RuleDataResource[]>({
+    groupVersionKind: {
+      group: RuleDataModel.apiGroup!,
+      version: RuleDataModel.apiVersion,
+      kind: RuleDataModel.kind,
+    },
+    isList: true,
+    namespace: ns,
+  });
+
+  if (!enginesLoaded || !ruleSetsLoaded || !ruleSourcesLoaded || !ruleDataLoaded) {
     return (
       <Bullseye>
         <Spinner />
@@ -47,6 +67,14 @@ export default function OverviewPage() {
 
   const engineList = engines ?? [];
   const ruleSetList = ruleSets ?? [];
+  const ruleSourceList = ruleSources ?? [];
+  const ruleDataItems = ruleDataList ?? [];
+
+  const hasResources =
+    engineList.length > 0 ||
+    ruleSetList.length > 0 ||
+    ruleSourceList.length > 0 ||
+    ruleDataItems.length > 0;
 
   return (
     <>
@@ -71,13 +99,29 @@ export default function OverviewPage() {
               </CardBody>
             </Card>
           </GalleryItem>
+          <GalleryItem>
+            <Card>
+              <CardTitle>RuleSources</CardTitle>
+              <CardBody>
+                <div style={{ fontSize: '2rem', fontWeight: 700 }}>{ruleSourceList.length}</div>
+              </CardBody>
+            </Card>
+          </GalleryItem>
+          <GalleryItem>
+            <Card>
+              <CardTitle>RuleData</CardTitle>
+              <CardBody>
+                <div style={{ fontSize: '2rem', fontWeight: 700 }}>{ruleDataItems.length}</div>
+              </CardBody>
+            </Card>
+          </GalleryItem>
         </Gallery>
       </PageSection>
       <PageSection>
         <Card>
           <CardTitle>Recent Resources</CardTitle>
           <CardBody>
-            {engineList.length === 0 && ruleSetList.length === 0 ? (
+            {!hasResources ? (
               <EmptyState>
                 <EmptyStateBody>No Coraza resources found in this namespace.</EmptyStateBody>
               </EmptyState>
@@ -101,7 +145,11 @@ export default function OverviewPage() {
                         </Link>
                       </td>
                       <td>{e.metadata?.namespace}</td>
-                      <td><StatusLabel status={getReadyStatus(e.status?.conditions)} /></td>
+                      <td>
+                        <StatusLabel
+                          status={getResourceStatus(e.status?.conditions, { checkAccepted: true })}
+                        />
+                      </td>
                     </tr>
                   ))}
                   {ruleSetList.map((r) => (
@@ -113,7 +161,31 @@ export default function OverviewPage() {
                         </Link>
                       </td>
                       <td>{r.metadata?.namespace}</td>
-                      <td><StatusLabel status={getReadyStatus(r.status?.conditions)} /></td>
+                      <td><StatusLabel status={getResourceStatus(r.status?.conditions)} /></td>
+                    </tr>
+                  ))}
+                  {ruleSourceList.map((r) => (
+                    <tr key={`rulesource-${r.metadata?.namespace}-${r.metadata?.name}`}>
+                      <td>RuleSource</td>
+                      <td>
+                        <Link to={`/coraza/rulesources/${r.metadata?.name}?ns=${r.metadata?.namespace}`}>
+                          {r.metadata?.name}
+                        </Link>
+                      </td>
+                      <td>{r.metadata?.namespace}</td>
+                      <td><StatusLabel status={getResourceStatus(r.status?.conditions)} /></td>
+                    </tr>
+                  ))}
+                  {ruleDataItems.map((r) => (
+                    <tr key={`ruledata-${r.metadata?.namespace}-${r.metadata?.name}`}>
+                      <td>RuleData</td>
+                      <td>
+                        <Link to={`/coraza/ruledata/${r.metadata?.name}?ns=${r.metadata?.namespace}`}>
+                          {r.metadata?.name}
+                        </Link>
+                      </td>
+                      <td>{r.metadata?.namespace}</td>
+                      <td><StatusLabel status={getResourceStatus(r.status?.conditions)} /></td>
                     </tr>
                   ))}
                 </tbody>

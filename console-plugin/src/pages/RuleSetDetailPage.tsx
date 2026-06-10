@@ -10,10 +10,6 @@ import {
   Card,
   CardTitle,
   CardBody,
-  DescriptionList,
-  DescriptionListGroup,
-  DescriptionListTerm,
-  DescriptionListDescription,
   Bullseye,
   Spinner,
   Breadcrumb,
@@ -23,7 +19,7 @@ import {
 } from '@patternfly/react-core';
 import { RuleSetResource } from '../utils/types';
 import { RuleSetModel } from '../utils/model';
-import { getReadyStatus } from '../utils/status';
+import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
 import { ResourceYAML } from '../components/ResourceYAML';
@@ -63,7 +59,7 @@ export default function RuleSetDetailPage() {
       <PageSection>
         <Title headingLevel="h1">
           {name}{' '}
-          <StatusLabel status={getReadyStatus(ruleSet.status?.conditions)} />
+          <StatusLabel status={getResourceStatus(ruleSet.status?.conditions)} />
         </Title>
         <span>{namespace}</span>
       </PageSection>
@@ -72,11 +68,13 @@ export default function RuleSetDetailPage() {
         <Card>
           <CardTitle>Rule Sources</CardTitle>
           <CardBody>
-            {ruleSet.spec.rules && ruleSet.spec.rules.length > 0 ? (
+            {ruleSet.spec.sources && ruleSet.spec.sources.length > 0 ? (
               <List isPlain>
-                {ruleSet.spec.rules.map((rule, i) => (
-                  <ListItem key={i}>
-                    <code>{rule.name}</code>
+                {ruleSet.spec.sources.map((source) => (
+                  <ListItem key={source.name}>
+                    <Link to={`/coraza/rulesources/${source.name}?ns=${namespace}`}>
+                      <code>{source.name}</code>
+                    </Link>
                   </ListItem>
                 ))}
               </List>
@@ -87,23 +85,26 @@ export default function RuleSetDetailPage() {
         </Card>
       </PageSection>
 
-      {ruleSet.spec.ruleData && (
-        <PageSection>
-          <Card>
-            <CardTitle>Rule Data</CardTitle>
-            <CardBody>
-              <DescriptionList>
-                <DescriptionListGroup>
-                  <DescriptionListTerm>Secret</DescriptionListTerm>
-                  <DescriptionListDescription>
-                    <code>{ruleSet.spec.ruleData}</code>
-                  </DescriptionListDescription>
-                </DescriptionListGroup>
-              </DescriptionList>
-            </CardBody>
-          </Card>
-        </PageSection>
-      )}
+      <PageSection>
+        <Card>
+          <CardTitle>Rule Data</CardTitle>
+          <CardBody>
+            {ruleSet.spec.data && ruleSet.spec.data.length > 0 ? (
+              <List isPlain>
+                {ruleSet.spec.data.map((data) => (
+                  <ListItem key={data.name}>
+                    <Link to={`/coraza/ruledata/${data.name}?ns=${namespace}`}>
+                      <code>{data.name}</code>
+                    </Link>
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <span>No rule data configured.</span>
+            )}
+          </CardBody>
+        </Card>
+      </PageSection>
 
       {ruleSet.status?.conditions && ruleSet.status.conditions.length > 0 && (
         <PageSection>

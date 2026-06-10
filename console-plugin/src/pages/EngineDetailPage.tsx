@@ -14,8 +14,6 @@ import {
   DescriptionListGroup,
   DescriptionListTerm,
   DescriptionListDescription,
-  Label,
-  LabelGroup,
   Bullseye,
   Spinner,
   Breadcrumb,
@@ -23,7 +21,7 @@ import {
 } from '@patternfly/react-core';
 import { EngineResource } from '../utils/types';
 import { EngineModel } from '../utils/model';
-import { getReadyStatus } from '../utils/status';
+import { getCondition, getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
 import { ResourceYAML } from '../components/ResourceYAML';
@@ -50,9 +48,8 @@ export default function EngineDetailPage() {
     );
   }
 
-  const wasm = engine.spec.driver.istio?.wasm;
-  const matchLabels = wasm?.workloadSelector?.matchLabels ?? {};
-  const gateways = engine.status?.gateways ?? [];
+  const wasm = engine.spec.driver?.wasm;
+  const accepted = getCondition(engine.status?.conditions, 'Accepted');
 
   return (
     <>
@@ -67,7 +64,9 @@ export default function EngineDetailPage() {
       <PageSection>
         <Title headingLevel="h1">
           {name}{' '}
-          <StatusLabel status={getReadyStatus(engine.status?.conditions)} />
+          <StatusLabel
+            status={getResourceStatus(engine.status?.conditions, { checkAccepted: true })}
+          />
         </Title>
         <span>{namespace}</span>
       </PageSection>
@@ -86,38 +85,48 @@ export default function EngineDetailPage() {
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
+                <DescriptionListTerm>Target Provider</DescriptionListTerm>
+                <DescriptionListDescription>{engine.spec.target?.provider ?? '—'}</DescriptionListDescription>
+              </DescriptionListGroup>
+              <DescriptionListGroup>
+                <DescriptionListTerm>Target Type</DescriptionListTerm>
+                <DescriptionListDescription>{engine.spec.target?.type ?? '—'}</DescriptionListDescription>
+              </DescriptionListGroup>
+              <DescriptionListGroup>
+                <DescriptionListTerm>Target Name</DescriptionListTerm>
+                <DescriptionListDescription>
+                  <code>{engine.spec.target?.name ?? '—'}</code>
+                </DescriptionListDescription>
+              </DescriptionListGroup>
+              <DescriptionListGroup>
                 <DescriptionListTerm>Driver</DescriptionListTerm>
                 <DescriptionListDescription>
-                  Istio / {wasm?.mode ?? '-'}
+                  {engine.spec.driver?.type ?? '—'}
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>WASM Image</DescriptionListTerm>
                 <DescriptionListDescription>
-                  <code>{wasm?.image ?? '-'}</code>
+                  <code>{wasm?.image ?? '—'}</code>
                 </DescriptionListDescription>
               </DescriptionListGroup>
-              <DescriptionListGroup>
-                <DescriptionListTerm>Failure Policy</DescriptionListTerm>
-                <DescriptionListDescription>{engine.spec.failurePolicy}</DescriptionListDescription>
-              </DescriptionListGroup>
-              {Object.keys(matchLabels).length > 0 && (
+              {wasm?.imagePullSecret && (
                 <DescriptionListGroup>
-                  <DescriptionListTerm>Workload Selector</DescriptionListTerm>
+                  <DescriptionListTerm>Image Pull Secret</DescriptionListTerm>
                   <DescriptionListDescription>
-                    <LabelGroup>
-                      {Object.entries(matchLabels).map(([k, v]) => (
-                        <Label key={k}>{k}={v}</Label>
-                      ))}
-                    </LabelGroup>
+                    <code>{wasm.imagePullSecret}</code>
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
-              {wasm?.ruleSetCacheServer && (
+              <DescriptionListGroup>
+                <DescriptionListTerm>Failure Policy</DescriptionListTerm>
+                <DescriptionListDescription>{engine.spec.failurePolicy ?? '—'}</DescriptionListDescription>
+              </DescriptionListGroup>
+              {engine.spec.ruleSetCacheServer?.pollIntervalSeconds != null && (
                 <DescriptionListGroup>
                   <DescriptionListTerm>Poll Interval</DescriptionListTerm>
                   <DescriptionListDescription>
-                    {wasm.ruleSetCacheServer.pollIntervalSeconds}s
+                    {engine.spec.ruleSetCacheServer.pollIntervalSeconds}s
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
@@ -126,27 +135,38 @@ export default function EngineDetailPage() {
         </Card>
       </PageSection>
 
+      {accepted && (
+        <PageSection>
+          <Card>
+            <CardTitle>Accepted</CardTitle>
+            <CardBody>
+              <DescriptionList>
+                <DescriptionListGroup>
+                  <DescriptionListTerm>Status</DescriptionListTerm>
+                  <DescriptionListDescription>{accepted.status}</DescriptionListDescription>
+                </DescriptionListGroup>
+                <DescriptionListGroup>
+                  <DescriptionListTerm>Reason</DescriptionListTerm>
+                  <DescriptionListDescription>{accepted.reason ?? '—'}</DescriptionListDescription>
+                </DescriptionListGroup>
+                {accepted.message && (
+                  <DescriptionListGroup>
+                    <DescriptionListTerm>Message</DescriptionListTerm>
+                    <DescriptionListDescription>{accepted.message}</DescriptionListDescription>
+                  </DescriptionListGroup>
+                )}
+              </DescriptionList>
+            </CardBody>
+          </Card>
+        </PageSection>
+      )}
+
       {engine.status?.conditions && engine.status.conditions.length > 0 && (
         <PageSection>
           <Card>
             <CardTitle>Conditions</CardTitle>
             <CardBody>
               <ConditionsTable conditions={engine.status.conditions} />
-            </CardBody>
-          </Card>
-        </PageSection>
-      )}
-
-      {gateways.length > 0 && (
-        <PageSection>
-          <Card>
-            <CardTitle>Matched Gateways</CardTitle>
-            <CardBody>
-              <LabelGroup>
-                {gateways.map((g) => (
-                  <Label key={g.name}>{g.name}</Label>
-                ))}
-              </LabelGroup>
             </CardBody>
           </Card>
         </PageSection>
