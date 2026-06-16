@@ -23,7 +23,7 @@ import { EngineModel } from '../utils/model';
 import { getCondition, getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
-import { ResourceYAML } from '../components/ResourceYAML';
+import { ResourceYAMLCard } from '../components/ResourceYAMLCard';
 
 export default function EngineDetailPage() {
   const { name } = useParams<{ name: string }>();
@@ -180,12 +180,7 @@ export default function EngineDetailPage() {
       )}
 
       <PageSection>
-        <Card>
-          <CardTitle>YAML</CardTitle>
-          <CardBody>
-            <ResourceYAML resource={engine} />
-          </CardBody>
-        </Card>
+        <ResourceYAMLCard resource={engine} />
       </PageSection>
     </>
   );

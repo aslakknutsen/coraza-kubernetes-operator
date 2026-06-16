@@ -21,7 +21,7 @@ import { RuleSetModel } from '../utils/model';
 import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
-import { ResourceYAML } from '../components/ResourceYAML';
+import { ResourceYAMLCard } from '../components/ResourceYAMLCard';
 
 export default function RuleSetDetailPage() {
   const { name } = useParams<{ name: string }>();
@@ -128,12 +128,7 @@ export default function RuleSetDetailPage() {
       )}
 
       <PageSection>
-        <Card>
-          <CardTitle>YAML</CardTitle>
-          <CardBody>
-            <ResourceYAML resource={ruleSet} />
-          </CardBody>
-        </Card>
+        <ResourceYAMLCard resource={ruleSet} />
       </PageSection>
     </>
   );

@@ -23,7 +23,7 @@ import { RuleSourceModel } from '../utils/model';
 import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
-import { ResourceYAML } from '../components/ResourceYAML';
+import { ResourceYAMLCard } from '../components/ResourceYAMLCard';
 
 const VALIDATION_ANNOTATION = 'waf.k8s.coraza.io/rule-validation';
 
@@ -119,12 +119,7 @@ export default function RuleSourceDetailPage() {
       )}
 
       <PageSection>
-        <Card>
-          <CardTitle>YAML</CardTitle>
-          <CardBody>
-            <ResourceYAML resource={ruleSource} />
-          </CardBody>
-        </Card>
+        <ResourceYAMLCard resource={ruleSource} />
       </PageSection>
     </>
   );
