@@ -440,6 +440,11 @@ CONSOLE_PLUGIN_CHART_DIR ?= charts/coraza-console-plugin
 CONSOLE_PLUGIN_IMAGE_BASE ?= ghcr.io/networking-incubator/coraza-console-plugin
 CONSOLE_PLUGIN_IMAGE_TAG ?= $(VERSION)
 CONSOLE_PLUGIN_IMAGE ?= $(CONSOLE_PLUGIN_IMAGE_BASE):$(CONSOLE_PLUGIN_IMAGE_TAG)
+CONSOLE_IMAGE ?= quay.io/openshift/origin-console:4.21
+CONSOLE_PORT ?= 9000
+CONSOLE_PLUGIN_DEV_PORT ?= 9001
+CONSOLE_PLUGIN_DEV_SA ?= console-dev
+KIND_CONTEXT ?= kind-$(KIND_CLUSTER_NAME)
 
 .PHONY: console-plugin.build
 console-plugin.build: yarn ## Build the console plugin
@@ -452,6 +457,30 @@ console-plugin.build.image: ## Build the console plugin container image
 .PHONY: console-plugin.lint
 console-plugin.lint: ## Lint the console plugin Helm chart
 	helm lint $(CONSOLE_PLUGIN_CHART_DIR)
+
+.PHONY: console-plugin.dev.setup
+console-plugin.dev.setup: yarn ## Prepare console plugin local dev (KIND RBAC and yarn deps)
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_PLUGIN_DIR=$(CURDIR)/$(CONSOLE_PLUGIN_DIR) CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) \
+	YARN=$(YARN) hack/console-plugin-dev-setup.sh
+
+.PHONY: console-plugin.dev.plugin
+console-plugin.dev.plugin: yarn ## Run the console plugin webpack dev server
+	cd $(CONSOLE_PLUGIN_DIR) && "$(YARN)" start
+
+.PHONY: console-plugin.dev.console
+console-plugin.dev.console: ## Run the OpenShift console container for local plugin dev
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_IMAGE=$(CONSOLE_IMAGE) CONSOLE_PORT=$(CONSOLE_PORT) \
+	CONSOLE_PLUGIN_DEV_PORT=$(CONSOLE_PLUGIN_DEV_PORT) CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) \
+	$(CONSOLE_PLUGIN_DIR)/start-console.sh
+
+.PHONY: console-plugin.dev
+console-plugin.dev: yarn ## Run console plugin local dev (webpack + OpenShift console)
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_PLUGIN_DIR=$(CURDIR)/$(CONSOLE_PLUGIN_DIR) CONSOLE_IMAGE=$(CONSOLE_IMAGE) \
+	CONSOLE_PORT=$(CONSOLE_PORT) CONSOLE_PLUGIN_DEV_PORT=$(CONSOLE_PLUGIN_DEV_PORT) \
+	CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) YARN=$(YARN) hack/console-plugin-dev.sh
 
 # -------------------------------------------------------------------------------
 # Helm

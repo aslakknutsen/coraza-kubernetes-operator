@@ -1,9 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom-v5-compat';
 import {
   useK8sWatchResource,
   useActiveNamespace,
 } from '@openshift-console/dynamic-plugin-sdk';
-import { Link } from 'react-router-dom';
 import {
   PageSection,
   Title,
@@ -32,7 +31,7 @@ export default function RuleDataDetailPage() {
   const searchParams = new URLSearchParams(window.location.search);
   const namespace = searchParams.get('ns') ?? ns;
 
-  const [ruleData, loaded] = useK8sWatchResource<RuleDataResource>({
+  const [ruleData, loaded, loadError] = useK8sWatchResource<RuleDataResource>({
     groupVersionKind: {
       group: RuleDataModel.apiGroup!,
       version: RuleDataModel.apiVersion,
@@ -42,7 +41,16 @@ export default function RuleDataDetailPage() {
     namespace,
   });
 
-  if (!loaded || !ruleData) {
+  if (loadError) {
+    return (
+      <PageSection>
+        <Title headingLevel="h1">Failed to load RuleData</Title>
+        <span>{loadError.message ?? String(loadError)}</span>
+      </PageSection>
+    );
+  }
+
+  if (!loaded || !ruleData?.spec) {
     return (
       <Bullseye>
         <Spinner />
@@ -50,7 +58,8 @@ export default function RuleDataDetailPage() {
     );
   }
 
-  const fileNames = Object.keys(ruleData.spec.files ?? {});
+  const { spec } = ruleData;
+  const fileNames = Object.keys(spec.files ?? {});
 
   return (
     <>

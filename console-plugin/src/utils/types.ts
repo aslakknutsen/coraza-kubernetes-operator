@@ -64,7 +64,7 @@ export interface EngineStatus {
 }
 
 export interface EngineResource extends K8sResourceCommon {
-  spec: EngineSpec;
+  spec?: EngineSpec;
   status?: EngineStatus;
 }
 

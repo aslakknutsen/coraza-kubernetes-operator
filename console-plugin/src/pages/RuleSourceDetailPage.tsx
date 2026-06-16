@@ -1,9 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom-v5-compat';
 import {
   useK8sWatchResource,
   useActiveNamespace,
 } from '@openshift-console/dynamic-plugin-sdk';
-import { Link } from 'react-router-dom';
 import {
   PageSection,
   Title,
@@ -36,7 +35,7 @@ export default function RuleSourceDetailPage() {
   const searchParams = new URLSearchParams(window.location.search);
   const namespace = searchParams.get('ns') ?? ns;
 
-  const [ruleSource, loaded] = useK8sWatchResource<RuleSourceResource>({
+  const [ruleSource, loaded, loadError] = useK8sWatchResource<RuleSourceResource>({
     groupVersionKind: {
       group: RuleSourceModel.apiGroup!,
       version: RuleSourceModel.apiVersion,
@@ -46,7 +45,16 @@ export default function RuleSourceDetailPage() {
     namespace,
   });
 
-  if (!loaded || !ruleSource) {
+  if (loadError) {
+    return (
+      <PageSection>
+        <Title headingLevel="h1">Failed to load RuleSource</Title>
+        <span>{loadError.message ?? String(loadError)}</span>
+      </PageSection>
+    );
+  }
+
+  if (!loaded || !ruleSource?.spec) {
     return (
       <Bullseye>
         <Spinner />
@@ -54,6 +62,7 @@ export default function RuleSourceDetailPage() {
     );
   }
 
+  const { spec } = ruleSource;
   const validationAnnotation = ruleSource.metadata?.annotations?.[VALIDATION_ANNOTATION];
 
   return (
@@ -83,7 +92,7 @@ export default function RuleSourceDetailPage() {
                 <DescriptionListTerm>Rules</DescriptionListTerm>
                 <DescriptionListDescription>
                   <pre style={{ maxHeight: '20rem', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-                    {ruleSource.spec.rules || '—'}
+                    {spec.rules || '—'}
                   </pre>
                 </DescriptionListDescription>
               </DescriptionListGroup>

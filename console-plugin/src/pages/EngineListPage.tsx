@@ -2,7 +2,7 @@ import {
   useK8sWatchResource,
   useActiveNamespace,
 } from '@openshift-console/dynamic-plugin-sdk';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom-v5-compat';
 import {
   PageSection,
   Title,
@@ -68,12 +68,16 @@ export default function EngineListPage() {
                   </td>
                   <td>{e.metadata?.namespace}</td>
                   <td>
-                    <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
-                      {e.spec.ruleSet.name}
-                    </Link>
+                    {e.spec?.ruleSet?.name ? (
+                      <Link to={`/coraza/rulesets/${e.spec.ruleSet.name}?ns=${e.metadata?.namespace}`}>
+                        {e.spec.ruleSet.name}
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
                   </td>
-                  <td>{e.spec.target?.name ?? '—'}</td>
-                  <td>{e.spec.failurePolicy ?? '—'}</td>
+                  <td>{e.spec?.target?.name ?? '—'}</td>
+                  <td>{e.spec?.failurePolicy ?? '—'}</td>
                   <td>
                     <StatusLabel
                       status={getResourceStatus(e.status?.conditions, { checkAccepted: true })}

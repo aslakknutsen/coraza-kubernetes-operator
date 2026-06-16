@@ -1,9 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom-v5-compat';
 import {
   useK8sWatchResource,
   useActiveNamespace,
 } from '@openshift-console/dynamic-plugin-sdk';
-import { Link } from 'react-router-dom';
 import {
   PageSection,
   Title,
@@ -32,19 +31,30 @@ export default function RuleSetDetailPage() {
   const searchParams = new URLSearchParams(window.location.search);
   const namespace = searchParams.get('ns') ?? ns;
 
-  const [ruleSet, loaded] = useK8sWatchResource<RuleSetResource>({
+  const [ruleSet, loaded, loadError] = useK8sWatchResource<RuleSetResource>({
     groupVersionKind: { group: RuleSetModel.apiGroup!, version: RuleSetModel.apiVersion, kind: RuleSetModel.kind },
     name,
     namespace,
   });
 
-  if (!loaded || !ruleSet) {
+  if (loadError) {
+    return (
+      <PageSection>
+        <Title headingLevel="h1">Failed to load RuleSet</Title>
+        <span>{loadError.message ?? String(loadError)}</span>
+      </PageSection>
+    );
+  }
+
+  if (!loaded || !ruleSet?.spec) {
     return (
       <Bullseye>
         <Spinner />
       </Bullseye>
     );
   }
+
+  const { spec } = ruleSet;
 
   return (
     <>
@@ -68,9 +78,9 @@ export default function RuleSetDetailPage() {
         <Card>
           <CardTitle>Rule Sources</CardTitle>
           <CardBody>
-            {ruleSet.spec.sources && ruleSet.spec.sources.length > 0 ? (
+            {spec.sources && spec.sources.length > 0 ? (
               <List isPlain>
-                {ruleSet.spec.sources.map((source) => (
+                {spec.sources.map((source) => (
                   <ListItem key={source.name}>
                     <Link to={`/coraza/rulesources/${source.name}?ns=${namespace}`}>
                       <code>{source.name}</code>
@@ -89,9 +99,9 @@ export default function RuleSetDetailPage() {
         <Card>
           <CardTitle>Rule Data</CardTitle>
           <CardBody>
-            {ruleSet.spec.data && ruleSet.spec.data.length > 0 ? (
+            {spec.data && spec.data.length > 0 ? (
               <List isPlain>
-                {ruleSet.spec.data.map((data) => (
+                {spec.data.map((data) => (
                   <ListItem key={data.name}>
                     <Link to={`/coraza/ruledata/${data.name}?ns=${namespace}`}>
                       <code>{data.name}</code>

@@ -1,9 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom-v5-compat';
 import {
   useK8sWatchResource,
   useActiveNamespace,
 } from '@openshift-console/dynamic-plugin-sdk';
-import { Link } from 'react-router-dom';
 import {
   PageSection,
   Title,
@@ -34,13 +33,22 @@ export default function EngineDetailPage() {
   const searchParams = new URLSearchParams(window.location.search);
   const namespace = searchParams.get('ns') ?? ns;
 
-  const [engine, loaded] = useK8sWatchResource<EngineResource>({
+  const [engine, loaded, loadError] = useK8sWatchResource<EngineResource>({
     groupVersionKind: { group: EngineModel.apiGroup!, version: EngineModel.apiVersion, kind: EngineModel.kind },
     name,
     namespace,
   });
 
-  if (!loaded || !engine) {
+  if (loadError) {
+    return (
+      <PageSection>
+        <Title headingLevel="h1">Failed to load Engine</Title>
+        <span>{loadError.message ?? String(loadError)}</span>
+      </PageSection>
+    );
+  }
+
+  if (!loaded || !engine?.spec) {
     return (
       <Bullseye>
         <Spinner />
@@ -48,7 +56,8 @@ export default function EngineDetailPage() {
     );
   }
 
-  const wasm = engine.spec.driver?.wasm;
+  const { spec } = engine;
+  const wasm = spec.driver?.wasm;
   const accepted = getCondition(engine.status?.conditions, 'Accepted');
 
   return (
@@ -79,30 +88,28 @@ export default function EngineDetailPage() {
               <DescriptionListGroup>
                 <DescriptionListTerm>RuleSet</DescriptionListTerm>
                 <DescriptionListDescription>
-                  <Link to={`/coraza/rulesets/${engine.spec.ruleSet.name}?ns=${namespace}`}>
-                    {engine.spec.ruleSet.name}
+                  <Link to={`/coraza/rulesets/${spec.ruleSet.name}?ns=${namespace}`}>
+                    {spec.ruleSet.name}
                   </Link>
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Target Provider</DescriptionListTerm>
-                <DescriptionListDescription>{engine.spec.target?.provider ?? '—'}</DescriptionListDescription>
+                <DescriptionListDescription>{spec.target.provider ?? '—'}</DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Target Type</DescriptionListTerm>
-                <DescriptionListDescription>{engine.spec.target?.type ?? '—'}</DescriptionListDescription>
+                <DescriptionListDescription>{spec.target.type ?? '—'}</DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Target Name</DescriptionListTerm>
                 <DescriptionListDescription>
-                  <code>{engine.spec.target?.name ?? '—'}</code>
+                  <code>{spec.target.name ?? '—'}</code>
                 </DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>Driver</DescriptionListTerm>
-                <DescriptionListDescription>
-                  {engine.spec.driver?.type ?? '—'}
-                </DescriptionListDescription>
+                <DescriptionListDescription>{spec.driver?.type ?? '—'}</DescriptionListDescription>
               </DescriptionListGroup>
               <DescriptionListGroup>
                 <DescriptionListTerm>WASM Image</DescriptionListTerm>
@@ -120,13 +127,13 @@ export default function EngineDetailPage() {
               )}
               <DescriptionListGroup>
                 <DescriptionListTerm>Failure Policy</DescriptionListTerm>
-                <DescriptionListDescription>{engine.spec.failurePolicy ?? '—'}</DescriptionListDescription>
+                <DescriptionListDescription>{spec.failurePolicy ?? '—'}</DescriptionListDescription>
               </DescriptionListGroup>
-              {engine.spec.ruleSetCacheServer?.pollIntervalSeconds != null && (
+              {spec.ruleSetCacheServer?.pollIntervalSeconds != null && (
                 <DescriptionListGroup>
                   <DescriptionListTerm>Poll Interval</DescriptionListTerm>
                   <DescriptionListDescription>
-                    {engine.spec.ruleSetCacheServer.pollIntervalSeconds}s
+                    {spec.ruleSetCacheServer.pollIntervalSeconds}s
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}

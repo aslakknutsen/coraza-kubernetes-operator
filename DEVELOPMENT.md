@@ -42,6 +42,58 @@ When you're done, you can destroy the cluster with:
 make clean.cluster.kind
 ```
 
+## Console Plugin (local dev)
+
+Run the Coraza console plugin against a KIND cluster with hot reload. The OpenShift
+Console runs in a container and loads plugin bundles from a local webpack dev server.
+
+### Prerequisites
+
+- A running KIND cluster with the operator installed (`make cluster.kind`)
+- Docker or Podman
+- Node.js 18+ on the host (for webpack)
+
+### Quick start
+
+```bash
+make console-plugin.dev
+```
+
+Open **http://localhost:9000/coraza** in your browser.
+
+This target:
+
+1. Verifies the KIND cluster and Coraza CRDs are present
+2. Creates a dev `console-dev` ServiceAccount with `cluster-admin` (local dev only)
+3. Installs yarn dependencies in `console-plugin/`
+4. Starts webpack on port **9001** and the OpenShift Console container on port **9000**
+
+Press Ctrl+C to stop both processes.
+
+### Split workflow
+
+For debugging, run setup once and use two terminals:
+
+```bash
+make console-plugin.dev.setup
+make console-plugin.dev.plugin    # terminal 1: webpack on :9001
+make console-plugin.dev.console   # terminal 2: console on :9000
+```
+
+### Environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KIND_CLUSTER_NAME` | KIND cluster name | `coraza-kubernetes-operator-integration` |
+| `CONSOLE_IMAGE` | OpenShift Console image | `quay.io/openshift/origin-console:4.21` |
+| `CONSOLE_PORT` | Console URL port on the host | `9000` |
+| `CONSOLE_PLUGIN_DEV_PORT` | Webpack dev server port | `9001` |
+| `CONTAINER_TOOL` | Container runtime for the console image | `docker` |
+
+This flow does **not** use the `ConsolePlugin` CR or console-operator patching.
+`BRIDGE_PLUGINS` loads the plugin directly from your host. For production
+OpenShift deployment, use the Helm chart in `charts/coraza-console-plugin`.
+
 # Testing
 
 ## Test Suites
