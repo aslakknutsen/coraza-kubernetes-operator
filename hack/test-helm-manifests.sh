@@ -56,6 +56,13 @@ out=$(render --set metrics.podMonitor.enabled=true --set 'metrics.podMonitor.gat
 echo "$out" | grep -q "kind: PodMonitor" && pass "PodMonitor rendered" || fail "PodMonitor missing"
 echo "$out" | grep -q "coraza_waf_" && pass "cardinality filter present" || fail "cardinality filter missing"
 
+# ── Test 5b: PodMonitor keepMetricRegex override ─────────────────────────────
+section "PodMonitor keepMetricRegex"
+out=$(render --set metrics.podMonitor.enabled=true \
+  --set 'metrics.podMonitor.gatewaySelector.app=my-gateway' \
+  --set metrics.podMonitor.keepMetricRegex='waf_filter_.*')
+echo "$out" | grep -qF 'waf_filter_.*' && pass "Custom keepMetricRegex rendered" || fail "keepMetricRegex override missing"
+
 # ── Test 6: PodMonitor with empty selector fails ──────────────────────────────
 section "PodMonitor rejects empty gatewaySelector"
 render_err=""

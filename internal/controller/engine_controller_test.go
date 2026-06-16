@@ -125,6 +125,41 @@ func TestEngineReconciler_BuildWasmPlugin_IstioRevisionLabel(t *testing.T) {
 	assert.False(t, has, "istio.io/rev should not be set when revision is empty")
 }
 
+func TestEngineReconciler_BuildWasmPlugin_MetricLabels(t *testing.T) {
+	engine := utils.NewTestEngine(utils.EngineOptions{
+		Name:      "metrics-engine",
+		Namespace: testNamespace,
+	})
+
+	reconciler := &EngineReconciler{
+		ruleSetCacheServerCluster: "test-cluster",
+	}
+
+	w := reconciler.buildWasmPlugin(engine, "oci://test.example/wasm:latest", "test-token")
+
+	spec, found, err := getNestedMap(w.Object, "spec")
+	require.NoError(t, err)
+	require.True(t, found)
+
+	pluginConfig, found, err := getNestedMap(spec, "pluginConfig")
+	require.NoError(t, err)
+	require.True(t, found)
+
+	metricLabels, found, err := getNestedMap(pluginConfig, "metric_labels")
+	require.NoError(t, err)
+	require.True(t, found, "metric_labels should be present in pluginConfig")
+
+	engineLabel, found, err := getNestedString(metricLabels, "engine")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.Equal(t, "metrics-engine", engineLabel)
+
+	namespaceLabel, found, err := getNestedString(metricLabels, "namespace")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.Equal(t, testNamespace, namespaceLabel)
+}
+
 func TestEngineReconciler_BuildWasmPlugin_CacheToken(t *testing.T) {
 	engine := utils.NewTestEngine(utils.EngineOptions{
 		Name:      "token-test-engine",

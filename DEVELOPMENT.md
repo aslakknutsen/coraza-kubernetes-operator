@@ -25,6 +25,25 @@ Create the cluster:
 make cluster.kind
 ```
 
+With Prometheus, sample WAF manifests, and Envoy stats configuration for console
+metrics graphs:
+
+```bash
+make cluster.kind.monitoring
+# equivalent to: MONITORING=1 make cluster.kind
+```
+
+This additionally installs `kube-prometheus-stack`, enables operator
+ServiceMonitor/PodMonitor/PrometheusRule, applies `config/samples/` WAF CRs,
+and exposes Prometheus on **http://127.0.0.1:30090**.
+
+Verify metrics:
+
+```bash
+curl -s 'http://127.0.0.1:30090/api/v1/query?query=coraza_engine_condition' | jq .
+curl -s 'http://127.0.0.1:30090/api/v1/query?query=waf_filter_tx_total' | jq .
+```
+
 This will have built the operator with your current changes and loaded the
 operator image into the cluster, and started the operator in the
 `coraza-system` namespace.
@@ -89,6 +108,13 @@ make console-plugin.dev.console   # terminal 2: console on :9000
 | `CONSOLE_PORT` | Console URL port on the host | `9000` |
 | `CONSOLE_PLUGIN_DEV_PORT` | Webpack dev server port | `9001` |
 | `CONTAINER_TOOL` | Container runtime for the console image | `docker` |
+| `PROMETHEUS_URL` | Prometheus/Thanos query URL for console graphs | Auto-started `kubectl port-forward` to `svc/kube-prometheus-stack-prometheus` on `127.0.0.1:30090` when the monitoring stack is installed |
+| `PROMETHEUS_NODE_PORT` | Local port for Prometheus port-forward | `30090` |
+
+Graphs on **Overview** and **Engine → Metrics** require a cluster created with
+`make cluster.kind.monitoring` (or `MONITORING=1 make cluster.kind`). `start-console.sh`
+starts a Prometheus port-forward automatically because KIND NodePorts are not
+reachable on `127.0.0.1` without it.
 
 This flow does **not** use the `ConsolePlugin` CR or console-operator patching.
 `BRIDGE_PLUGINS` loads the plugin directly from your host. For production

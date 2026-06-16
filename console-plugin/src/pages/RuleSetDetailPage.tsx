@@ -22,6 +22,8 @@ import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
 import { ConditionsTable } from '../components/ConditionsTable';
 import { ResourceYAMLCard } from '../components/ResourceYAMLCard';
+import { MetricsCard } from '../components/MetricsCard';
+import { ruleSetQueries } from '../utils/promql';
 
 export default function RuleSetDetailPage() {
   const { name } = useParams<{ name: string }>();
@@ -46,7 +48,7 @@ export default function RuleSetDetailPage() {
     );
   }
 
-  if (!loaded || !ruleSet?.spec) {
+  if (!loaded || !ruleSet?.spec || !name) {
     return (
       <Bullseye>
         <Spinner />
@@ -126,6 +128,15 @@ export default function RuleSetDetailPage() {
           </Card>
         </PageSection>
       )}
+
+      <PageSection>
+        <MetricsCard
+          title="RuleSet conditions"
+          queries={[ruleSetQueries.conditionTimeline(name, namespace)]}
+          namespace={namespace}
+          showLegend
+        />
+      </PageSection>
 
       <PageSection>
         <ResourceYAMLCard resource={ruleSet} />

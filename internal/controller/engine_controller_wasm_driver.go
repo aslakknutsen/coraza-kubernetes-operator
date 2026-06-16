@@ -175,6 +175,10 @@ func (r *EngineReconciler) buildWasmPlugin(engine *wafv1alpha1.Engine, wasmURL s
 		"cache_server_cluster":  r.ruleSetCacheServerCluster,
 		"failure_policy":        string(failurePolicy),
 		"cache_token":           cacheToken,
+		"metric_labels": map[string]any{
+			"engine":    engine.Name,
+			"namespace": engine.Namespace,
+		},
 	}
 
 	if engine.Spec.RuleSetCacheServer != nil {

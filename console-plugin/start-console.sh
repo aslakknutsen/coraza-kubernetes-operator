@@ -81,6 +81,65 @@ configure_openshift_cluster() {
   fi
 }
 
+PROMETHEUS_NODE_PORT=${PROMETHEUS_NODE_PORT:=30090}
+PROMETHEUS_NAMESPACE=${PROMETHEUS_NAMESPACE:=monitoring}
+PROMETHEUS_SVC_NAME=${PROMETHEUS_SVC_NAME:=kube-prometheus-stack-prometheus}
+PROMETHEUS_PF_PID=""
+
+cleanup_prometheus_port_forward() {
+  if [ -n "${PROMETHEUS_PF_PID}" ] && kill -0 "${PROMETHEUS_PF_PID}" 2>/dev/null; then
+    kill "${PROMETHEUS_PF_PID}" 2>/dev/null || true
+    wait "${PROMETHEUS_PF_PID}" 2>/dev/null || true
+  fi
+  PROMETHEUS_PF_PID=""
+}
+
+prometheus_svc_exists() {
+  kubectl --context="${KIND_CONTEXT}" get svc -n "${PROMETHEUS_NAMESPACE}" \
+    "${PROMETHEUS_SVC_NAME}" >/dev/null 2>&1
+}
+
+start_kind_prometheus_port_forward() {
+  cleanup_prometheus_port_forward
+  kubectl --context="${KIND_CONTEXT}" port-forward -n "${PROMETHEUS_NAMESPACE}" \
+    "svc/${PROMETHEUS_SVC_NAME}" "${PROMETHEUS_NODE_PORT}:9090" >/dev/null 2>&1 &
+  PROMETHEUS_PF_PID=$!
+
+  local attempt
+  for attempt in $(seq 1 40); do
+    if curl -sf "http://127.0.0.1:${PROMETHEUS_NODE_PORT}/-/ready" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! kill -0 "${PROMETHEUS_PF_PID}" 2>/dev/null; then
+      break
+    fi
+    sleep 0.25
+  done
+
+  echo "Prometheus port-forward to ${PROMETHEUS_SVC_NAME} failed" >&2
+  cleanup_prometheus_port_forward
+  return 1
+}
+
+resolve_kind_prometheus_url() {
+  if [ -n "${PROMETHEUS_URL:-}" ]; then
+    echo "${PROMETHEUS_URL}"
+    return 0
+  fi
+
+  if ! prometheus_svc_exists; then
+    return 1
+  fi
+
+  # KIND NodePorts are on the docker node IP, not 127.0.0.1. Port-forward to localhost
+  # so the console container can reach Prometheus (with host.docker.internal on non-Linux).
+  if start_kind_prometheus_port_forward; then
+    echo "http://127.0.0.1:${PROMETHEUS_NODE_PORT}"
+    return 0
+  fi
+  return 1
+}
+
 configure_kind_cluster() {
   if ! kubectl config get-contexts "${KIND_CONTEXT}" >/dev/null 2>&1; then
     echo "kubectl context ${KIND_CONTEXT} not found; run 'make cluster.kind' first" >&2
@@ -94,9 +153,19 @@ configure_kind_cluster() {
     kubectl --context="${KIND_CONTEXT}" create token "${CONSOLE_PLUGIN_DEV_SA}" \
       -n "${CONSOLE_PLUGIN_DEV_SA_NAMESPACE}" --duration=24h
   )
+
+  local prometheus_url
+  if prometheus_url=$(resolve_kind_prometheus_url); then
+    BRIDGE_K8S_MODE_OFF_CLUSTER_THANOS="${prometheus_url}"
+    echo "Prometheus query URL: ${BRIDGE_K8S_MODE_OFF_CLUSTER_THANOS} (via kubectl port-forward pid ${PROMETHEUS_PF_PID})"
+  else
+    echo "Prometheus not detected; console graphs will be unavailable (use make cluster.kind.monitoring)" >&2
+  fi
 }
 
 echo "Starting local OpenShift console..."
+
+trap cleanup_prometheus_port_forward EXIT INT TERM
 
 BRIDGE_USER_AUTH="disabled"
 BRIDGE_K8S_MODE="off-cluster"
@@ -134,6 +203,9 @@ else
   PLUGIN_HOST="host.docker.internal"
   BRIDGE_PLUGINS="${PLUGIN_NAME}=http://${PLUGIN_HOST}:${CONSOLE_PLUGIN_DEV_PORT}"
   BRIDGE_K8S_MODE_OFF_CLUSTER_ENDPOINT=$(rewrite_localhost_endpoint "${BRIDGE_K8S_MODE_OFF_CLUSTER_ENDPOINT}" "${PLUGIN_HOST}")
+  if [ -n "${BRIDGE_K8S_MODE_OFF_CLUSTER_THANOS:-}" ]; then
+    BRIDGE_K8S_MODE_OFF_CLUSTER_THANOS=$(rewrite_localhost_endpoint "${BRIDGE_K8S_MODE_OFF_CLUSTER_THANOS}" "${PLUGIN_HOST}")
+  fi
   RUN_ARGS+=(-p "${CONSOLE_PORT}:9000" --add-host="${PLUGIN_HOST}:host-gateway")
 fi
 

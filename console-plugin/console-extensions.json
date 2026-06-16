@@ -46,7 +46,7 @@
   {
     "type": "console.page/route",
     "properties": {
-      "exact": true,
+      "exact": false,
       "path": "/coraza/engines/:name",
       "component": { "$codeRef": "EngineDetailPage" }
     }

@@ -26,6 +26,10 @@ The Coraza Kubernetes Operator Helm chart is located at `charts/coraza-kubernete
 | `metrics.keyName` | string | `tls.key` | Key name of the private key file inside `certSecret`. |
 | `metrics.caName` | string | `""` | Key name of a CA certificate inside `certSecret` for ServiceMonitor TLS verification. |
 | `metrics.serviceMonitor.enabled` | bool | `false` | Create a Prometheus ServiceMonitor resource. |
+| `metrics.prometheusRule.enabled` | bool | `false` | Create PrometheusRule alerting and recording rules (requires Prometheus Operator). |
+| `metrics.podMonitor.enabled` | bool | `false` | Scrape WAF data-plane metrics from Gateway Envoy pods. Requires `gatewaySelector`. |
+| `metrics.podMonitor.keepMetricRegex` | string | `coraza_waf_.*` | Regex for the mandatory PodMonitor cardinality guard (`keep` action). Use `waf_filter_.*` for coraza-proxy-wasm stats. |
+| `metrics.podMonitor.gatewaySelector` | object | `{}` | Label selector for Gateway pods (required when PodMonitor is enabled). |
 | `logging.development` | bool | `false` | Use console encoder with debug level (development mode). When false, the production settings below apply. |
 | `logging.encoder` | string | `json` | Log encoding format (`json` or `console`). Only used when `development` is false. |
 | `logging.level` | string | `info` | Minimum log level (`debug`, `info`, `error`). Only used when `development` is false. |

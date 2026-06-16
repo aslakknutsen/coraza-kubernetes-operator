@@ -78,8 +78,12 @@ metrics:
     # Port name on Gateway pods that exposes Envoy stats.
     # Default is the Istio convention; override for non-Istio service meshes.
     portName: "http-envoy-prom"
+    # Mandatory cardinality guard: keep only metrics matching this regex.
+    # Default coraza_waf_.* for the native driver contract; use waf_filter_.*
+    # when scraping coraza-proxy-wasm path-encoded stats (see coraza-proxy-wasm docs).
+    keepMetricRegex: "coraza_waf_.*"
     # Additional metricRelabelings appended AFTER the mandatory cardinality guard.
-    # The guard (keep only coraza_waf_.*) is always enforced first.
+    # The guard (keep only metrics matching keepMetricRegex) is always enforced first.
     metricRelabelings: []
 
 logging:

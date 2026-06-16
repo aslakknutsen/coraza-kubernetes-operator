@@ -20,10 +20,13 @@ import { EngineResource, RuleSetResource, RuleSourceResource, RuleDataResource }
 import { EngineModel, RuleSetModel, RuleSourceModel, RuleDataModel } from '../utils/model';
 import { getResourceStatus } from '../utils/status';
 import { StatusLabel } from '../components/StatusLabel';
+import { MetricsCard } from '../components/MetricsCard';
+import { overviewQueries, queryBrowserNamespace } from '../utils/promql';
 
 export default function OverviewPage() {
   const [activeNamespace] = useActiveNamespace();
   const ns = activeNamespace === '#ALL_NS#' ? undefined : activeNamespace;
+  const promNamespace = queryBrowserNamespace(activeNamespace);
 
   const [engines, enginesLoaded] = useK8sWatchResource<EngineResource[]>({
     groupVersionKind: { group: EngineModel.apiGroup!, version: EngineModel.apiVersion, kind: EngineModel.kind },
@@ -116,6 +119,37 @@ export default function OverviewPage() {
             </Card>
           </GalleryItem>
         </Gallery>
+      </PageSection>
+      <PageSection>
+        <Title headingLevel="h2">Metrics</Title>
+      </PageSection>
+      <PageSection>
+        <MetricsCard
+          title="Engines not ready"
+          queries={[overviewQueries.enginesNotReady()]}
+          namespace={promNamespace}
+        />
+      </PageSection>
+      <PageSection>
+        <MetricsCard
+          title="RuleSets not ready"
+          queries={[overviewQueries.ruleSetsNotReady()]}
+          namespace={promNamespace}
+        />
+      </PageSection>
+      <PageSection>
+        <MetricsCard
+          title="Cache utilization"
+          queries={[overviewQueries.cacheUtilization()]}
+        />
+      </PageSection>
+      <PageSection>
+        <MetricsCard
+          title="Top WAF interruptions (5m rate)"
+          queries={[overviewQueries.topWafInterruptions(ns)]}
+          namespace={promNamespace}
+          showLegend
+        />
       </PageSection>
       <PageSection>
         <Card>
