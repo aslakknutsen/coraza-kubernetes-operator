@@ -1,0 +1,132 @@
+[
+  {
+    "type": "console.navigation/section",
+    "properties": {
+      "id": "coraza-waf",
+      "perspective": "admin",
+      "name": "Coraza WAF"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza",
+      "component": { "$codeRef": "OverviewPage" }
+    }
+  },
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "coraza-overview",
+      "name": "Overview",
+      "href": "/coraza",
+      "perspective": "admin",
+      "section": "coraza-waf"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/engines",
+      "component": { "$codeRef": "EngineListPage" }
+    }
+  },
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "coraza-engines",
+      "name": "Engines",
+      "href": "/coraza/engines",
+      "perspective": "admin",
+      "section": "coraza-waf"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": false,
+      "path": "/coraza/engines/:name",
+      "component": { "$codeRef": "EngineDetailPage" }
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/rulesets",
+      "component": { "$codeRef": "RuleSetListPage" }
+    }
+  },
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "coraza-rulesets",
+      "name": "RuleSets",
+      "href": "/coraza/rulesets",
+      "perspective": "admin",
+      "section": "coraza-waf"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/rulesets/:name",
+      "component": { "$codeRef": "RuleSetDetailPage" }
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/rulesources",
+      "component": { "$codeRef": "RuleSourceListPage" }
+    }
+  },
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "coraza-rulesources",
+      "name": "RuleSources",
+      "href": "/coraza/rulesources",
+      "perspective": "admin",
+      "section": "coraza-waf"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/rulesources/:name",
+      "component": { "$codeRef": "RuleSourceDetailPage" }
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/ruledata",
+      "component": { "$codeRef": "RuleDataListPage" }
+    }
+  },
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "coraza-ruledata",
+      "name": "RuleData",
+      "href": "/coraza/ruledata",
+      "perspective": "admin",
+      "section": "coraza-waf"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/coraza/ruledata/:name",
+      "component": { "$codeRef": "RuleDataDetailPage" }
+    }
+  }
+]

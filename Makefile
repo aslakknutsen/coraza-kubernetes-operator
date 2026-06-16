@@ -241,7 +241,11 @@ lint.api: kube-api-linter
 
 .PHONY: cluster.kind
 cluster.kind:
-	ISTIO_VERSION=${ISTIO_VERSION} METALLB_VERSION=${METALLB_VERSION} METALLB_POOL_SIZE=${METALLB_POOL_SIZE} CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE=${CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE} CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG=${CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG} python3 hack/kind_cluster.py setup
+	ISTIO_VERSION=${ISTIO_VERSION} METALLB_VERSION=${METALLB_VERSION} METALLB_POOL_SIZE=${METALLB_POOL_SIZE} CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE=${CONTROLLER_MANAGER_CONTAINER_IMAGE_BASE} CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG=${CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG} MONITORING=${MONITORING} python3 hack/kind_cluster.py setup
+
+.PHONY: cluster.kind.monitoring
+cluster.kind.monitoring: ## Create KIND cluster with Prometheus and sample WAF for console metrics
+	$(MAKE) cluster.kind MONITORING=1
 
 .PHONY: cluster.load-images
 cluster.load-images:
@@ -331,7 +335,7 @@ FTW_OVERRIDES ?= $(shell pwd)/test/conformance/.ftw-overrides.yml
 # Conformance needs --ignore-unsupported-rules=none so output matches the pre-exclusion golden hash and FTW exercises the full rule set.
 .PHONY: coreruleset.verify-parity
 coreruleset.verify-parity:
-	@$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule --ignore-unsupported-rules=none" coraza.generaterules
+	@$(MAKE) CORERULESET_EXTRA_FLAGS="--include-test-rule --ignore-unsupported-rules=none --skip-validation-rulesource=request-999-common-exceptions-after" coraza.generaterules
 	sha256sum -c tools/corerulesetgen/testdata/coreruleset_parity.sha256
 
 .PHONY: test.conformance
@@ -432,6 +436,57 @@ catalog.undeploy: ## Remove the CatalogSource CR from the cluster
 	kubectl delete catalogsource coraza-kubernetes-operator -n $(CATALOG_NAMESPACE) --ignore-not-found
 
 # -------------------------------------------------------------------------------
+# Console Plugin
+# -------------------------------------------------------------------------------
+
+CONSOLE_PLUGIN_DIR ?= console-plugin
+CONSOLE_PLUGIN_CHART_DIR ?= charts/coraza-console-plugin
+CONSOLE_PLUGIN_IMAGE_BASE ?= ghcr.io/networking-incubator/coraza-console-plugin
+CONSOLE_PLUGIN_IMAGE_TAG ?= $(VERSION)
+CONSOLE_PLUGIN_IMAGE ?= $(CONSOLE_PLUGIN_IMAGE_BASE):$(CONSOLE_PLUGIN_IMAGE_TAG)
+CONSOLE_IMAGE ?= quay.io/openshift/origin-console:4.21
+CONSOLE_PORT ?= 9000
+CONSOLE_PLUGIN_DEV_PORT ?= 9001
+CONSOLE_PLUGIN_DEV_SA ?= console-dev
+KIND_CONTEXT ?= kind-$(KIND_CLUSTER_NAME)
+
+.PHONY: console-plugin.build
+console-plugin.build: yarn ## Build the console plugin
+	cd $(CONSOLE_PLUGIN_DIR) && "$(YARN)" install && "$(YARN)" build
+
+.PHONY: console-plugin.build.image
+console-plugin.build.image: ## Build the console plugin container image
+	$(CONTAINER_TOOL) build -t $(CONSOLE_PLUGIN_IMAGE) $(CONSOLE_PLUGIN_DIR)
+
+.PHONY: console-plugin.lint
+console-plugin.lint: ## Lint the console plugin Helm chart
+	helm lint $(CONSOLE_PLUGIN_CHART_DIR)
+
+.PHONY: console-plugin.dev.setup
+console-plugin.dev.setup: yarn ## Prepare console plugin local dev (KIND RBAC and yarn deps)
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_PLUGIN_DIR=$(CURDIR)/$(CONSOLE_PLUGIN_DIR) CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) \
+	YARN=$(YARN) hack/console-plugin-dev-setup.sh
+
+.PHONY: console-plugin.dev.plugin
+console-plugin.dev.plugin: yarn ## Run the console plugin webpack dev server
+	cd $(CONSOLE_PLUGIN_DIR) && "$(YARN)" start
+
+.PHONY: console-plugin.dev.console
+console-plugin.dev.console: ## Run the OpenShift console container for local plugin dev
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_IMAGE=$(CONSOLE_IMAGE) CONSOLE_PORT=$(CONSOLE_PORT) \
+	CONSOLE_PLUGIN_DEV_PORT=$(CONSOLE_PLUGIN_DEV_PORT) CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) \
+	$(CONSOLE_PLUGIN_DIR)/start-console.sh
+
+.PHONY: console-plugin.dev
+console-plugin.dev: yarn ## Run console plugin local dev (webpack + OpenShift console)
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) KIND_CONTEXT=$(KIND_CONTEXT) \
+	CONSOLE_PLUGIN_DIR=$(CURDIR)/$(CONSOLE_PLUGIN_DIR) CONSOLE_IMAGE=$(CONSOLE_IMAGE) \
+	CONSOLE_PORT=$(CONSOLE_PORT) CONSOLE_PLUGIN_DEV_PORT=$(CONSOLE_PLUGIN_DEV_PORT) \
+	CONSOLE_PLUGIN_DEV_SA=$(CONSOLE_PLUGIN_DEV_SA) YARN=$(YARN) hack/console-plugin-dev.sh
+
+# -------------------------------------------------------------------------------
 # Helm
 # -------------------------------------------------------------------------------
 
@@ -463,6 +518,19 @@ helm.sync-rbac: manifests ## Sync generated RBAC rules into the Helm chart Clust
 
 .PHONY: helm.sync
 helm.sync: helm.sync-crds helm.sync-rbac ## Sync all generated resources into the Helm chart
+
+# -------------------------------------------------------------------------------
+# Testing - Helm
+# -------------------------------------------------------------------------------
+
+.PHONY: helm.validate
+helm.validate: ## Validate Helm templates render correctly for key flag combinations
+	hack/test-helm-manifests.sh
+
+.PHONY: test.metrics
+test.metrics: ## Run metrics integration tests (requires KIND cluster)
+	go clean -testcache
+	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) ISTIO_VERSION=${ISTIO_VERSION} go test -tags=integration -run TestCorazaControllerMetrics ./test/integration/... -v
 
 # -------------------------------------------------------------------------------
 # Documentation
@@ -534,11 +602,13 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 KUBE_API_LINTER = $(LOCALBIN)/golangci-lint-kube-api-linter
+YARN ?= $(LOCALBIN)/yarn
 
 CONTROLLER_TOOLS_VERSION ?= v0.21.0
 GOLANGCI_LINT_VERSION ?= v2.5.0
 OPERATOR_SDK_VERSION ?= v1.42.0
 KUBE_API_LINTER_VERSION ?= v0.0.0-20260206102632-39e3d06a2850
+YARN_VERSION ?= v1.22.22
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN)
@@ -571,6 +641,18 @@ $(OPERATOR_SDK): $(LOCALBIN)
 kube-api-linter: $(KUBE_API_LINTER)
 $(KUBE_API_LINTER): $(LOCALBIN)
 	$(call go-install-tool,$(KUBE_API_LINTER),sigs.k8s.io/kube-api-linter/cmd/golangci-lint-kube-api-linter,$(KUBE_API_LINTER_VERSION))
+
+.PHONY: yarn
+yarn: $(YARN)
+$(YARN): $(LOCALBIN)
+	@[ -f "$(YARN)-$(YARN_VERSION)" ] || { \
+	set -e; \
+	echo "Downloading yarn $(YARN_VERSION)"; \
+	curl -sSL https://github.com/yarnpkg/yarn/releases/download/$(YARN_VERSION)/yarn-$(YARN_VERSION).tar.gz | tar xz -C $(LOCALBIN); \
+	mv "$(LOCALBIN)/yarn-$(YARN_VERSION)" "$(LOCALBIN)/.yarn-dist-$(YARN_VERSION)"; \
+	ln -sf "$(LOCALBIN)/.yarn-dist-$(YARN_VERSION)/bin/yarn" "$(YARN)-$(YARN_VERSION)"; \
+	}
+	@ln -sf "$(YARN)-$(YARN_VERSION)" "$(YARN)"
 
 define go-install-tool
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \

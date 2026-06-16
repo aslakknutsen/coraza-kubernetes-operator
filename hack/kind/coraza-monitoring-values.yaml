@@ -1,0 +1,19 @@
+# Helm values overlay for Coraza operator when MONITORING=1 Kind setup is used.
+# Applied via: helm upgrade --install ... -f hack/kind/coraza-monitoring-values.yaml
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  prometheusRule:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  podMonitor:
+    enabled: true
+    keepMetricRegex: "waf_filter_.*"
+    gatewaySelector:
+      gateway.networking.k8s.io/gateway-name: coraza-gateway
+    additionalLabels:
+      release: kube-prometheus-stack

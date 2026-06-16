@@ -25,6 +25,25 @@ Create the cluster:
 make cluster.kind
 ```
 
+With Prometheus, sample WAF manifests, and Envoy stats configuration for console
+metrics graphs:
+
+```bash
+make cluster.kind.monitoring
+# equivalent to: MONITORING=1 make cluster.kind
+```
+
+This additionally installs `kube-prometheus-stack`, enables operator
+ServiceMonitor/PodMonitor/PrometheusRule, applies `config/samples/` WAF CRs,
+and exposes Prometheus on **http://127.0.0.1:30090**.
+
+Verify metrics:
+
+```bash
+curl -s 'http://127.0.0.1:30090/api/v1/query?query=coraza_engine_condition' | jq .
+curl -s 'http://127.0.0.1:30090/api/v1/query?query=waf_filter_tx_total' | jq .
+```
+
 This will have built the operator with your current changes and loaded the
 operator image into the cluster, and started the operator in the
 `coraza-system` namespace.
@@ -41,6 +60,65 @@ When you're done, you can destroy the cluster with:
 ```bash
 make clean.cluster.kind
 ```
+
+## Console Plugin (local dev)
+
+Run the Coraza console plugin against a KIND cluster with hot reload. The OpenShift
+Console runs in a container and loads plugin bundles from a local webpack dev server.
+
+### Prerequisites
+
+- A running KIND cluster with the operator installed (`make cluster.kind`)
+- Docker or Podman
+- Node.js 18+ on the host (for webpack)
+
+### Quick start
+
+```bash
+make console-plugin.dev
+```
+
+Open **http://localhost:9000/coraza** in your browser.
+
+This target:
+
+1. Verifies the KIND cluster and Coraza CRDs are present
+2. Creates a dev `console-dev` ServiceAccount with `cluster-admin` (local dev only)
+3. Installs yarn dependencies in `console-plugin/`
+4. Starts webpack on port **9001** and the OpenShift Console container on port **9000**
+
+Press Ctrl+C to stop both processes.
+
+### Split workflow
+
+For debugging, run setup once and use two terminals:
+
+```bash
+make console-plugin.dev.setup
+make console-plugin.dev.plugin    # terminal 1: webpack on :9001
+make console-plugin.dev.console   # terminal 2: console on :9000
+```
+
+### Environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KIND_CLUSTER_NAME` | KIND cluster name | `coraza-kubernetes-operator-integration` |
+| `CONSOLE_IMAGE` | OpenShift Console image | `quay.io/openshift/origin-console:4.21` |
+| `CONSOLE_PORT` | Console URL port on the host | `9000` |
+| `CONSOLE_PLUGIN_DEV_PORT` | Webpack dev server port | `9001` |
+| `CONTAINER_TOOL` | Container runtime for the console image | `docker` |
+| `PROMETHEUS_URL` | Prometheus/Thanos query URL for console graphs | Auto-started `kubectl port-forward` to `svc/kube-prometheus-stack-prometheus` on `127.0.0.1:30090` when the monitoring stack is installed |
+| `PROMETHEUS_NODE_PORT` | Local port for Prometheus port-forward | `30090` |
+
+Graphs on **Overview** and **Engine → Metrics** require a cluster created with
+`make cluster.kind.monitoring` (or `MONITORING=1 make cluster.kind`). `start-console.sh`
+starts a Prometheus port-forward automatically because KIND NodePorts are not
+reachable on `127.0.0.1` without it.
+
+This flow does **not** use the `ConsolePlugin` CR or console-operator patching.
+`BRIDGE_PLUGINS` loads the plugin directly from your host. For production
+OpenShift deployment, use the Helm chart in `charts/coraza-console-plugin`.
 
 # Testing
 
@@ -214,7 +292,7 @@ This runs `kubectl-coraza` (`go run ./cmd/kubectl-coraza generate coreruleset` v
 5. Create a RuleSet resource referencing RuleSources via `spec.sources` and RuleData via `spec.data`
 6. Output everything to `tmp/rules/rules.yaml`
 
-Conformance CI runs `make coreruleset.verify-parity`, which regenerates that manifest (see the `coreruleset.verify-parity` target in the Makefile for the exact `kubectl-coraza` flags) and checks `sha256sum` against `tools/corerulesetgen/testdata/coreruleset_parity.sha256`. After bumping `CORERULESET_VERSION` or changing generator output, refresh the checksum with `make coreruleset.verify-parity` (it will fail until you run `sha256sum tmp/rules/rules.yaml` and replace the hash line in `tools/corerulesetgen/testdata/coreruleset_parity.sha256`).
+Conformance CI runs `make coreruleset.verify-parity`, which regenerates that manifest with `--include-test-rule --ignore-unsupported-rules=none --skip-validation-rulesource=request-999-common-exceptions-after` (see the `coreruleset.verify-parity` target in the Makefile) and checks `sha256sum` against `tools/corerulesetgen/testdata/coreruleset_parity.sha256`. After bumping `CORERULESET_VERSION` or changing generator output, refresh the checksum with `make coreruleset.verify-parity` (it will fail until you run `sha256sum tmp/rules/rules.yaml` and replace the hash line in `tools/corerulesetgen/testdata/coreruleset_parity.sha256`).
 
 Install the plugin for ad hoc use: build `bin/kubectl-coraza` (`make build`) and ensure it is on your `PATH` as `kubectl-coraza` so `kubectl coraza …` resolves it ([plugin discovery](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/)).
 
@@ -228,6 +306,8 @@ Install the plugin for ad hoc use: build `bin/kubectl-coraza` (`make build`) and
 - `--version` - CoreRuleSet version (required); accepts `4.24.1` and `v4.24.1`
 - `--ignore-rules` - Comma-separated rule IDs to exclude (e.g. `949110,949111,980130`)
 - `--ignore-pmFromFile` - Strip rules containing `@pmFromFile` (not supported by Coraza WASM paths)
+- `--ignore-unsupported-rules` - Profile to drop WASM-unsupported rule IDs (`wasm` default; `none` for full CRS)
+- `--skip-validation-rulesource` - Comma-separated RuleSource names to annotate with `rule-validation: "false"`
 - `--include-test-rule` - Append the X-CRS-Test block to the bundled `base-rules` RuleSource
 - `--ruleset-name`, `--namespace` / `-n`, `--data-source-name`, `--name-prefix`, `--name-suffix`
 - `--dry-run=client` - Same stdout output; stderr notes dry-run (no cluster writes are performed in either case)

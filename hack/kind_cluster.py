@@ -25,6 +25,9 @@ GATEWAY_API_URL = (
     "/releases/download/v1.4.1/standard-install.yaml"
 )
 SAIL_REPO = "https://istio-ecosystem.github.io/sail-operator"
+PROMETHEUS_RELEASE = "kube-prometheus-stack"
+PROMETHEUS_NAMESPACE = "monitoring"
+PROMETHEUS_NODE_PORT = 30090
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +46,11 @@ def require_env(key: str) -> str:
 
 def get_kind_context(name: str) -> str:
     return f"kind-{name}"
+
+
+def monitoring_enabled() -> bool:
+    """Return True when MONITORING=1 (or true/yes) is set in the environment."""
+    return os.environ.get("MONITORING", "").lower() in ("1", "true", "yes")
 
 
 # ---------------------------------------------------------------------------
@@ -219,11 +227,21 @@ def deploy_istio_sail(context: str) -> None:
     )
 
 
-def create_istio_control_plane(context: str) -> None:
+def create_istio_control_plane(context: str, *, monitoring: bool = False) -> None:
     """Create the Istio CR for the control plane and wait for readiness."""
     istio_version = require_env("ISTIO_VERSION")
 
     run(f"kubectl --context {context} create namespace coraza-system", check=False)
+
+    mesh_config = ""
+    if monitoring:
+        mesh_config = """
+    meshConfig:
+      defaultConfig:
+        proxyStatsMatcher:
+          inclusionRegexps:
+            - ".*waf_filter.*"
+"""
 
     print("Creating Istio control-plane")
     istio_cr = f"""
@@ -235,7 +253,7 @@ metadata:
 spec:
   namespace: coraza-system
   version: v{istio_version}
-  values:
+  values:{mesh_config}
     pilot:
       env:
         PILOT_GATEWAY_API_CONTROLLER_NAME: "istio.io/gateway-controller"
@@ -303,7 +321,7 @@ def create_gateway(context: str, loadbalancer: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-def deploy_coraza_operator(context: str) -> None:
+def deploy_coraza_operator(context: str, *, monitoring: bool = False) -> None:
     """Deploy the Coraza operator via Helm and wait for readiness."""
     print("Deploying Coraza Operator")
 
@@ -312,6 +330,10 @@ def deploy_coraza_operator(context: str) -> None:
         "ghcr.io/networking-incubator/coraza-kubernetes-operator",
     )
     image_tag = os.environ.get("CONTROLLER_MANAGER_CONTAINER_IMAGE_TAG", "v0.0.0-dev")
+
+    monitoring_values = ""
+    if monitoring:
+        monitoring_values = " -f hack/kind/coraza-monitoring-values.yaml"
 
     run(
         f"helm upgrade --install {HELM_RELEASE_NAME} {HELM_CHART_DIR} "
@@ -322,6 +344,7 @@ def deploy_coraza_operator(context: str) -> None:
         f"--set createNamespace=false "
         f"--set istio.revision=coraza "
         f"--kube-context {context}"
+        f"{monitoring_values}"
     )
 
     run(
@@ -329,6 +352,63 @@ def deploy_coraza_operator(context: str) -> None:
         "--for=condition=Available "
         "deployment/coraza-kubernetes-operator --timeout=300s"
     )
+
+
+# ---------------------------------------------------------------------------
+# Prometheus (optional MONITORING=1)
+# ---------------------------------------------------------------------------
+
+
+def deploy_prometheus(context: str) -> None:
+    """Install kube-prometheus-stack for Kind console dev and metrics scraping."""
+    print("Deploying kube-prometheus-stack")
+    run(
+        "helm repo add prometheus-community "
+        "https://prometheus-community.github.io/helm-charts",
+        check=False,
+    )
+    run("helm repo update")
+    run(
+        f"kubectl --context {context} create namespace {PROMETHEUS_NAMESPACE}",
+        check=False,
+    )
+
+    result = run(
+        f"helm list --namespace {PROMETHEUS_NAMESPACE} --kube-context {context} "
+        f"-o json | grep -q {PROMETHEUS_RELEASE}",
+        check=False,
+    )
+    helm_cmd = "upgrade" if result.returncode == 0 else "install"
+
+    run(
+        f"helm {helm_cmd} {PROMETHEUS_RELEASE} "
+        f"prometheus-community/kube-prometheus-stack "
+        f"--namespace {PROMETHEUS_NAMESPACE} --kube-context {context} "
+        f"-f hack/kind/prometheus-values.yaml --wait --timeout 10m"
+    )
+
+    run(
+        f"kubectl --context {context} -n {PROMETHEUS_NAMESPACE} wait "
+        "--for=condition=Ready pod "
+        "-l app.kubernetes.io/name=prometheus --timeout=300s"
+    )
+
+
+def deploy_waf_samples(context: str) -> None:
+    """Apply sample WAF CRs and EnvoyFilter for monitoring demos."""
+    print(f"Deploying WAF samples in namespace {DEFAULT_NAMESPACE}")
+    samples = [
+        "config/samples/ruleset.yaml",
+        "config/samples/engine.yaml",
+        "config/samples/echo.yaml",
+        "config/samples/httproute.yaml",
+        "config/samples/envoyfilter-waf-stats.yaml",
+    ]
+    for manifest in samples:
+        run(
+            f"kubectl --context {context} -n {DEFAULT_NAMESPACE} "
+            f"apply -f {manifest}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -354,11 +434,24 @@ def setup_cluster(name: str) -> None:
             create_metallb_manifests(context, get_kind_network_range())
             metallb_enabled = True
 
+    monitoring = monitoring_enabled()
+
     deploy_istio_sail(context)
-    create_istio_control_plane(context)
+    create_istio_control_plane(context, monitoring=monitoring)
     create_gateway_class(context)
     create_gateway(context, metallb_enabled)
-    deploy_coraza_operator(context)
+    if monitoring:
+        deploy_prometheus(context)
+    deploy_coraza_operator(context, monitoring=monitoring)
+    if monitoring:
+        deploy_waf_samples(context)
+        print(
+            f"Prometheus UI/query API: http://127.0.0.1:{PROMETHEUS_NODE_PORT}"
+        )
+        print(
+            "Console plugin dev auto-detects this URL via start-console.sh "
+            "(override with PROMETHEUS_URL)"
+        )
 
     print("Cluster setup complete")
 

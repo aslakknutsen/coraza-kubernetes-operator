@@ -1,0 +1,21 @@
+# Helm values for kube-prometheus-stack on KIND (MONITORING=1).
+# Prometheus is exposed on NodePort 30090 for Console dev and host access.
+
+grafana:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    # Discover ServiceMonitors and PodMonitors from all namespaces.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}

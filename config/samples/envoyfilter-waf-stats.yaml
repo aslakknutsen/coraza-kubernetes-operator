@@ -1,0 +1,38 @@
+# EnvoyFilter: extract coraza-proxy-wasm waf_filter_* Prometheus labels from stat names.
+#
+# Requires:
+#   - coraza-proxy-wasm loaded on gateway pods (Engine + WasmPlugin)
+#   - proxyStatsMatcher inclusion for waf_filter stats (Kind MONITORING=1 sets this mesh-wide)
+#   - metric_labels.engine and metric_labels.namespace in WasmPlugin pluginConfig
+#
+# See: https://github.com/corazawaf/coraza-proxy-wasm#waf-metrics
+# PodMonitor scraping is configured via Helm (metrics.podMonitor), not this file.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: coraza-waf-stats-tags
+spec:
+  workloadSelector:
+    labels:
+      gateway.networking.k8s.io/gateway-name: coraza-gateway
+  configPatches:
+    - applyTo: BOOTSTRAP
+      patch:
+        operation: MERGE
+        value:
+          stats_config:
+            stats_tags:
+              - tag_name: phase
+                regex: "(_phase=([a-z_]+))"
+              - tag_name: rule_id
+                regex: "(_ruleid=([0-9]+))"
+              - tag_name: identifier
+                regex: "(_identifier=([0-9a-z.:]+))"
+              - tag_name: owner
+                regex: "(_owner=([0-9a-z.:]+))"
+              - tag_name: authority
+                regex: "(_authority=([0-9a-z.:]+))"
+              - tag_name: engine
+                regex: "(_engine=([0-9a-z._-]+))"
+              - tag_name: namespace
+                regex: "(_namespace=([0-9a-z._-]+))"

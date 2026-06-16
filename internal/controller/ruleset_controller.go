@@ -38,6 +38,7 @@ import (
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/cache"
+	"github.com/networking-incubator/coraza-kubernetes-operator/internal/rulesets/validation"
 )
 
 // -----------------------------------------------------------------------------
@@ -48,10 +49,15 @@ import (
 // +kubebuilder:rbac:groups=waf.k8s.coraza.io,resources=rulesets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=waf.k8s.coraza.io,resources=rulesources,verbs=get;list;watch
 // +kubebuilder:rbac:groups=waf.k8s.coraza.io,resources=ruledata,verbs=get;list;watch
+// +kubebuilder:rbac:groups=waf.k8s.coraza.io,resources=ruledata/status,verbs=get;update;patch
 
 // -----------------------------------------------------------------------------
 // RuleSetReconciler
 // -----------------------------------------------------------------------------
+
+// ruleSourceValidationRequeue is used when a RuleSet is waiting on RuleSource
+// validation status before aggregate validation can run.
+const ruleSourceValidationRequeue = 3 * time.Second
 
 // RuleSetReconciler reconciles a RuleSet object
 type RuleSetReconciler struct {
@@ -59,6 +65,7 @@ type RuleSetReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
 	Cache    *cache.RuleSetCache
+	Metrics  *CorazaMetrics
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -93,10 +100,7 @@ func (r *RuleSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&wafv1alpha1.RuleSource{},
 			handler.EnqueueRequestsFromMapFunc(r.findRuleSetsForRuleSource),
-			builder.WithPredicates(predicate.Or(
-				predicate.GenerationChangedPredicate{},
-				annotationChangedPredicate(wafv1alpha1.AnnotationSkipValidation),
-			)),
+			builder.WithPredicates(ruleSourceWatchPredicate()),
 		).
 		Watches(
 			&wafv1alpha1.RuleData{},
@@ -131,11 +135,21 @@ func (r *RuleSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			} else {
 				logDebug(log, req, "RuleSet", "Resource not found, no cache entry to remove")
 			}
+			r.Metrics.ForgetRuleSet(req.Namespace, req.Name)
+			r.reconcileRuleDataMetrics(ctx, req.Namespace)
 			return ctrl.Result{}, nil
 		}
 		logAPIError(log, req, "RuleSet", err, "Failed to GET", nil)
 		return ctrl.Result{}, err
 	}
+
+	defer func() {
+		if r.Metrics == nil {
+			return
+		}
+		r.Metrics.RecordRuleSet(&ruleset)
+		r.reconcileRuleDataMetrics(ctx, req.Namespace)
+	}()
 
 	logDebug(log, req, "RuleSet", "Initializing status")
 	if err := r.initializeStatus(ctx, log, req, &ruleset); err != nil {
@@ -157,18 +171,28 @@ func (r *RuleSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	logDebug(log, req, "RuleSet", "Loading RuleSource objects")
-	aggregatedRules, aggregatedErrors, done, err := r.loadSources(ctx, log, req, &ruleset, dataFiles)
-	if done || err != nil {
+	aggregatedRules, done, requeueAfter, err := r.loadSources(ctx, log, req, &ruleset)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if done {
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
 	logInfo(log, req, "RuleSet", "Validating aggregated rules")
+	if err := validation.ValidatePMFromFileData(aggregatedRules, dataFiles); err != nil {
+		msg := fmt.Sprintf("Ruleset is invalid\n%v", err)
+		if patchErr := patchDegraded(ctx, r.Status(), r.Recorder, log, req, "RuleSet", &ruleset, &ruleset.Status.Conditions, ruleset.Generation, "InvalidRuleSet", msg); patchErr != nil {
+			return ctrl.Result{}, patchErr
+		}
+		return ctrl.Result{}, nil
+	}
 	fsRules := getDataFilesystem(dataFiles)
 	conf := coraza.NewWAFConfig().WithDirectives(aggregatedRules)
 	if fsRules != nil {
 		conf = conf.WithRootFS(fsRules)
 	}
-	if err := r.validateAggregatedRules(ctx, log, req, &ruleset, conf, aggregatedErrors); err != nil {
+	if err := r.validateAggregatedRules(ctx, log, req, &ruleset, conf); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -182,7 +206,56 @@ func (r *RuleSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	logInfo(log, req, "RuleSet", "Caching rules")
-	return r.cacheRules(ctx, log, req, &ruleset, aggregatedRules, dataFiles, unsupportedMsg)
+	if err := r.cacheRules(ctx, log, req, &ruleset, aggregatedRules, dataFiles, unsupportedMsg); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// -----------------------------------------------------------------------------
+// RuleSetReconciler - Metrics Helpers
+// -----------------------------------------------------------------------------
+
+// reconcileRuleDataMetrics updates namespace-level RuleData metrics: the total
+// count of all RuleData objects, and cleanup of per-object series for RuleData
+// not referenced by any RuleSet. Called from both the not-found path (RuleSet
+// deleted) and the defer block (normal reconcile).
+//
+// Because there is no dedicated RuleData reconciler, these counts only refresh
+// when a RuleSet in the same namespace reconciles. Orphaned RuleData created or
+// deleted without a corresponding RuleSet change will appear stale until the
+// next RuleSet reconciliation in that namespace.
+func (r *RuleSetReconciler) reconcileRuleDataMetrics(ctx context.Context, ns string) {
+	if r.Metrics == nil {
+		return
+	}
+	var rsList wafv1alpha1.RuleSetList
+	if err := r.List(ctx, &rsList, client.InNamespace(ns)); err != nil {
+		return
+	}
+	r.Metrics.SetRuleSetsTotal(ns, len(rsList.Items))
+
+	referencedData := make(map[string]struct{})
+	for i := range rsList.Items {
+		for _, d := range rsList.Items[i].Spec.Data {
+			referencedData[d.Name] = struct{}{}
+		}
+	}
+
+	// coraza_ruledatas = raw count of ALL RuleData objects in the namespace.
+	// This intentionally differs from coraza_ruledata_info, which only covers
+	// RuleData objects referenced by at least one RuleSet. The raw total is
+	// useful for detecting unreferenced (orphaned) RuleData objects.
+	var rdList wafv1alpha1.RuleDataList
+	if err := r.List(ctx, &rdList, client.InNamespace(ns)); err != nil {
+		return
+	}
+	r.Metrics.SetRuleDatasTotal(ns, len(rdList.Items))
+	for i := range rdList.Items {
+		if _, referenced := referencedData[rdList.Items[i].Name]; !referenced {
+			r.Metrics.ForgetRuleData(ns, rdList.Items[i].Name)
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -201,6 +274,20 @@ func (r *RuleSetReconciler) initializeStatus(ctx context.Context, log logr.Logge
 	applyStatusProgressing(&ruleset.Status.Conditions, ruleset.Generation, "Reconciling", "Starting reconciliation")
 	if err := r.Status().Patch(ctx, ruleset, patch); err != nil {
 		logAPIError(log, req, "RuleSet", err, "Failed to patch initial status", ruleset)
+		return err
+	}
+	logConditionTransitions(log, req, "RuleSet", before, ruleset.Status.Conditions)
+	return nil
+}
+
+// patchRuleSetAwaitingRuleSources marks the RuleSet as Progressing while
+// referenced RuleSources are not yet validated by the RuleSource controller.
+func (r *RuleSetReconciler) patchRuleSetAwaitingRuleSources(ctx context.Context, log logr.Logger, req ctrl.Request, ruleset *wafv1alpha1.RuleSet, message string) error {
+	patch := client.MergeFrom(ruleset.DeepCopy())
+	before := snapshotConditions(ruleset.Status.Conditions)
+	applyStatusProgressing(&ruleset.Status.Conditions, ruleset.Generation, "AwaitingRuleSourceValidation", message)
+	if err := r.Status().Patch(ctx, ruleset, patch); err != nil {
+		logAPIError(log, req, "RuleSet", err, "Failed to patch status", ruleset)
 		return err
 	}
 	logConditionTransitions(log, req, "RuleSet", before, ruleset.Status.Conditions)

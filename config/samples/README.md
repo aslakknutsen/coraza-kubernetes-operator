@@ -12,11 +12,14 @@ Kubernetes Gateway API and Istio.
 | `gateway.yaml` | Kubernetes Gateway API `Gateway` using the Istio gateway class |
 | `httproute.yaml` | `HTTPRoute` that sends all traffic through the gateway to the echo service |
 | `echo.yaml` | A simple echo Deployment and Service to act as the backend |
+| `envoyfilter-waf-stats.yaml` | `EnvoyFilter` that extracts `waf_filter_*` Prometheus labels from coraza-proxy-wasm stat names (requires mesh `proxyStatsMatcher` for `waf_filter`) |
 
 ## Prerequisites
 
 - Kubernetes cluster with Istio and Gateway API CRDs installed
 - coraza-kubernetes-operator running in the cluster
+
+For Prometheus metrics and Console graphs on Kind, use `MONITORING=1 make cluster.kind` (see [DEVELOPMENT.md](../DEVELOPMENT.md)).
 
 ## Deploy
 
@@ -25,6 +28,26 @@ All samples must be deployed to the same namespace.
 ```bash
 kubectl apply -f config/samples/
 ```
+
+When using Gateway API auto-deployment, apply `envoyfilter-waf-stats.yaml` after the gateway pod exists.
+
+## Metrics
+
+coraza-proxy-wasm exposes `waf_filter_*` counters on the Envoy stats port (`:15090/stats/prometheus`). Labels such as `rule_id`, `phase`, `engine`, and `namespace` require:
+
+1. `metric_labels` in the WasmPlugin `pluginConfig` (set by the operator on each Engine)
+2. `envoyfilter-waf-stats.yaml` (`stats_config.stats_tags` regex extractors)
+3. Mesh or gateway `proxyStatsMatcher` inclusion for `waf_filter` stats
+4. A Prometheus `PodMonitor` with `keepMetricRegex: waf_filter_.*` (see `hack/kind/coraza-monitoring-values.yaml`)
+
+Verify on a gateway pod:
+
+```bash
+kubectl exec -n integration-tests deploy/coraza-gateway-istio -c istio-proxy -- \
+  curl -s localhost:15090/stats/prometheus | grep waf_filter
+```
+
+See [coraza-proxy-wasm WAF metrics](https://github.com/corazawaf/coraza-proxy-wasm#waf-metrics).
 
 ## Test
 
