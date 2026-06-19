@@ -96,10 +96,23 @@ spec:
             - sources
             type: object
           status:
+            default:
+              conditions:
+              - lastTransitionTime: "1970-01-01T00:00:00Z"
+                message: Waiting for controller
+                reason: Pending
+                status: Unknown
+                type: Ready
             description: status defines the observed state of RuleSet.
             minProperties: 1
             properties:
               conditions:
+                default:
+                - lastTransitionTime: "1970-01-01T00:00:00Z"
+                  message: Waiting for controller
+                  reason: Pending
+                  status: Unknown
+                  type: Ready
                 description: |-
                   conditions represent the current state of the RuleSet resource.
                   Each condition has a unique type and reflects the status of a specific aspect of the resource.

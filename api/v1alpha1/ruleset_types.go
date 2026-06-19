@@ -64,6 +64,7 @@ type RuleSet struct {
 	// status defines the observed state of RuleSet.
 	//
 	// +optional
+	// +kubebuilder:default={conditions: {{type: "Ready", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
 	Status RuleSetStatus `json:"status,omitempty,omitzero"`
 }
 
@@ -128,7 +129,7 @@ type RuleSetCacheServerConfig struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=3600
 	// +optional
-	// +default=15
+	// +kubebuilder:default=15
 	PollIntervalSeconds int32 `json:"pollIntervalSeconds,omitempty"`
 }
 
@@ -182,5 +183,6 @@ type RuleSetStatus struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
+	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }

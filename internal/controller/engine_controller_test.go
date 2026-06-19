@@ -2125,3 +2125,66 @@ func TestEngineReconciler_ReadyToTargetNotFound(t *testing.T) {
 	_, found := reconciler.tokenStore.Load(tokenKey)
 	assert.False(t, found, "token store entry should be removed when Engine is not accepted")
 }
+
+func TestEngineReconciler_CRDDefaultStatusInitialization(t *testing.T) {
+	ctx := context.Background()
+	ns := testNamespace
+
+	createTestGateway(t, ctx, k8sClient, "test-gw", ns)
+
+	ruleset := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "crd-default-ruleset",
+		Namespace: ns,
+	})
+	require.NoError(t, k8sClient.Create(ctx, ruleset))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleset); err != nil {
+			t.Logf("Failed to delete ruleset: %v", err)
+		}
+	})
+
+	engine := utils.NewTestEngine(utils.EngineOptions{
+		Name:        "crd-default-engine",
+		Namespace:   ns,
+		RuleSetName: ruleset.Name,
+	})
+	engine.Status = utils.CRDDefaultEngineStatus()
+	require.NoError(t, k8sClient.Create(ctx, engine))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, engine); err != nil {
+			t.Logf("Failed to delete engine: %v", err)
+		}
+	})
+
+	recorder := utils.NewFakeRecorder()
+	reconciler := &EngineReconciler{
+		Client:                    k8sClient,
+		Scheme:                    scheme,
+		Recorder:                  recorder,
+		kubeClient:                testKubeClient,
+		ruleSetCacheServerCluster: "test-cluster",
+		defaultWasmImage:          defaults.DefaultCorazaWasmOCIReference,
+		operatorNamespace:         testNamespace,
+	}
+	engineReq := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      engine.Name,
+			Namespace: engine.Namespace,
+		},
+	}
+
+	result, err := reconciler.Reconcile(ctx, engineReq)
+	require.NoError(t, err)
+	assert.NotZero(t, result.RequeueAfter)
+
+	result, err = reconciler.Reconcile(ctx, engineReq)
+	require.NoError(t, err)
+	assert.NotZero(t, result.RequeueAfter)
+
+	var updated wafv1alpha1.Engine
+	require.NoError(t, k8sClient.Get(ctx, engineReq.NamespacedName, &updated))
+	readyCond := apimeta.FindStatusCondition(updated.Status.Conditions, "Ready")
+	require.NotNil(t, readyCond)
+	assert.Equal(t, metav1.ConditionTrue, readyCond.Status)
+	assert.NotEqual(t, wafv1alpha1.ConditionReasonPending, readyCond.Reason)
+}

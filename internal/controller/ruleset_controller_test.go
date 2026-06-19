@@ -1195,3 +1195,48 @@ func TestRuleSetReconciler_DuplicateDataReferences(t *testing.T) {
 	assert.True(t, recorder.HasEvent("Warning", "DuplicateReference"),
 		"expected Warning/DuplicateReference event; got: %v", recorder.Events)
 }
+
+func TestRuleSetReconciler_CRDDefaultStatusInitialization(t *testing.T) {
+	ctx := context.Background()
+	ruleSetCache := cache.NewRuleSetCache()
+
+	ruleSrc := utils.NewTestRuleSource("crd-default-src", testNamespace, "SecCollectionTimeout 1")
+	require.NoError(t, k8sClient.Create(ctx, ruleSrc))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleSrc); err != nil {
+			t.Logf("failed to delete %s: %v", ruleSrc.Name, err)
+		}
+	})
+
+	ruleSet := utils.NewTestRuleSet(utils.RuleSetOptions{
+		Name:      "crd-default-ruleset",
+		Namespace: testNamespace,
+		Sources: []wafv1alpha1.SourceReference{
+			{Name: "crd-default-src"},
+		},
+	})
+	ruleSet.Status = utils.CRDDefaultRuleSetStatus()
+	require.NoError(t, k8sClient.Create(ctx, ruleSet))
+	t.Cleanup(func() {
+		if err := k8sClient.Delete(ctx, ruleSet); err != nil {
+			t.Logf("failed to delete RuleSet: %v", err)
+		}
+	})
+
+	reconciler := &RuleSetReconciler{
+		Client:   k8sClient,
+		Scheme:   scheme,
+		Recorder: utils.NewFakeRecorder(),
+		Cache:    ruleSetCache,
+	}
+	_, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: ruleSet.Name, Namespace: ruleSet.Namespace}, ruleSet))
+	ready := apimeta.FindStatusCondition(ruleSet.Status.Conditions, "Ready")
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionTrue, ready.Status)
+	assert.NotEqual(t, wafv1alpha1.ConditionReasonPending, ready.Reason)
+}

@@ -24,7 +24,6 @@ import (
 	"github.com/corazawaf/coraza/v3"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
@@ -192,7 +191,7 @@ func (r *RuleSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // initializeStatus sets the initial Progressing condition if the RuleSet has
 // never been reconciled before.
 func (r *RuleSetReconciler) initializeStatus(ctx context.Context, log logr.Logger, req ctrl.Request, ruleset *wafv1alpha1.RuleSet) error {
-	if apimeta.FindStatusCondition(ruleset.Status.Conditions, conditionReady) != nil {
+	if !needsInitializeStatus(ruleset.Status.Conditions) {
 		return nil
 	}
 

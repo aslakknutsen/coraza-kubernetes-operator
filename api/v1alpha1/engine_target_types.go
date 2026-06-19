@@ -69,7 +69,7 @@ type EngineTarget struct {
 	// The current default is Istio.
 	//
 	// +optional
-	// +default="Istio"
+	// +kubebuilder:default="Istio"
 	// +k8s:immutable
 	Provider EngineTargetProvider `json:"provider,omitempty"`
 }
