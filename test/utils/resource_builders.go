@@ -19,6 +19,8 @@ limitations under the License.
 package utils
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
@@ -97,6 +99,41 @@ func NewTestRuleSet(opts RuleSetOptions) *wafv1alpha1.RuleSet {
 	}
 
 	return ruleset
+}
+
+// CRDDefaultReadyConditions returns the Ready condition applied by CRD OpenAPI defaults.
+func CRDDefaultReadyConditions() []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               wafv1alpha1.ConditionTypeReady,
+			Status:             metav1.ConditionUnknown,
+			Reason:             wafv1alpha1.ConditionReasonPending,
+			Message:            wafv1alpha1.InitialConditionMessage,
+			LastTransitionTime: metav1.Time{Time: time.Unix(0, 0).UTC()},
+			ObservedGeneration: 0,
+		},
+	}
+}
+
+// CRDDefaultRuleSetStatus returns the status shape applied by the RuleSet CRD defaults.
+func CRDDefaultRuleSetStatus() wafv1alpha1.RuleSetStatus {
+	return wafv1alpha1.RuleSetStatus{
+		Conditions: CRDDefaultReadyConditions(),
+	}
+}
+
+// CRDDefaultEngineStatus returns the status shape applied by the Engine CRD defaults.
+func CRDDefaultEngineStatus() *wafv1alpha1.EngineStatus {
+	conditions := CRDDefaultReadyConditions()
+	conditions = append(conditions, metav1.Condition{
+		Type:               wafv1alpha1.ConditionTypeAccepted,
+		Status:             metav1.ConditionUnknown,
+		Reason:             wafv1alpha1.ConditionReasonPending,
+		Message:            wafv1alpha1.InitialConditionMessage,
+		LastTransitionTime: metav1.Time{Time: time.Unix(0, 0).UTC()},
+		ObservedGeneration: 0,
+	})
+	return &wafv1alpha1.EngineStatus{Conditions: conditions}
 }
 
 // -----------------------------------------------------------------------------

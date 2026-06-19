@@ -226,6 +226,54 @@ func TestSanitizeErrorMessage_NoAbsolutePathLeak(t *testing.T) {
 	}
 }
 
+func TestNeedsInitializeStatus(t *testing.T) {
+	t.Run("nil conditions", func(t *testing.T) {
+		assert.True(t, needsInitializeStatus(nil))
+	})
+
+	t.Run("empty conditions", func(t *testing.T) {
+		assert.True(t, needsInitializeStatus([]metav1.Condition{}))
+	})
+
+	t.Run("CRD-default Ready placeholder", func(t *testing.T) {
+		conditions := []metav1.Condition{
+			{
+				Type:               wafv1alpha1.ConditionTypeReady,
+				Status:             metav1.ConditionUnknown,
+				Reason:             wafv1alpha1.ConditionReasonPending,
+				Message:            wafv1alpha1.InitialConditionMessage,
+				LastTransitionTime: metav1.Time{},
+				ObservedGeneration: 0,
+			},
+		}
+		assert.True(t, needsInitializeStatus(conditions))
+	})
+
+	t.Run("reconciled Ready condition", func(t *testing.T) {
+		conditions := []metav1.Condition{
+			{
+				Type:               wafv1alpha1.ConditionTypeReady,
+				Status:             metav1.ConditionFalse,
+				Reason:             "Reconciling",
+				ObservedGeneration: 1,
+			},
+		}
+		assert.False(t, needsInitializeStatus(conditions))
+	})
+
+	t.Run("Unknown Pending with observed generation", func(t *testing.T) {
+		conditions := []metav1.Condition{
+			{
+				Type:               wafv1alpha1.ConditionTypeReady,
+				Status:             metav1.ConditionUnknown,
+				Reason:             wafv1alpha1.ConditionReasonPending,
+				ObservedGeneration: 1,
+			},
+		}
+		assert.False(t, needsInitializeStatus(conditions))
+	})
+}
+
 func TestShouldSkipMissingFileError(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -202,7 +202,7 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if engine.Status == nil {
 		engine.Status = &wafv1alpha1.EngineStatus{}
 	}
-	if apimeta.FindStatusCondition(engine.Status.Conditions, conditionReady) == nil {
+	if needsInitializeStatus(engine.Status.Conditions) {
 		patch := client.MergeFrom(engine.DeepCopy())
 		before := snapshotConditions(engine.Status.Conditions)
 		applyStatusProgressing(&engine.Status.Conditions, engine.Generation, "Reconciling", "Starting reconciliation")

@@ -59,6 +59,7 @@ type Engine struct {
 	// status defines the observed state of Engine.
 	//
 	// +optional
+	// +kubebuilder:default={conditions: {{type: "Ready", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"},{type: "Accepted", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
 	Status *EngineStatus `json:"status,omitempty"`
 }
 
@@ -113,7 +114,7 @@ type EngineSpec struct {
 	// The current default is fail.
 	//
 	// +optional
-	// +default="fail"
+	// +kubebuilder:default="fail"
 	FailurePolicy FailurePolicy `json:"failurePolicy,omitempty"`
 
 	// ruleSetCacheServer contains configuration for the ruleset cache server.
@@ -160,6 +161,7 @@ type EngineStatus struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
+	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"},{type: "Accepted", status: "Unknown", reason: "Pending", message: "Waiting for controller", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 

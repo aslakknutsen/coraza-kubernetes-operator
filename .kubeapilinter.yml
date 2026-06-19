@@ -30,6 +30,8 @@ linters:
               isFirstField: Warn
               usePatchStrategy: Ignore
               useProtobuf: Ignore
+            defaults:
+              preferredDefaultMarker: kubebuilder:default
             forbiddenmarkers:
               markers:
               - identifier: "openshift:enable:FeatureSets"

@@ -36,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	wafv1alpha1 "github.com/networking-incubator/coraza-kubernetes-operator/api/v1alpha1"
 )
 
 // -----------------------------------------------------------------------------
@@ -118,6 +120,21 @@ func extractStatusErrorFields(err error) []any {
 // -----------------------------------------------------------------------------
 // Status Condition Helpers
 // -----------------------------------------------------------------------------
+
+// isInitialPendingCondition reports whether c is the CRD-default unreconciled placeholder.
+func isInitialPendingCondition(c *metav1.Condition) bool {
+	return c != nil &&
+		c.Status == metav1.ConditionUnknown &&
+		c.Reason == wafv1alpha1.ConditionReasonPending &&
+		c.ObservedGeneration == 0
+}
+
+// needsInitializeStatus reports whether the object still has CRD-default status
+// and the controller should transition to Progressing on first reconcile.
+func needsInitializeStatus(conditions []metav1.Condition) bool {
+	ready := apimeta.FindStatusCondition(conditions, conditionReady)
+	return ready == nil || isInitialPendingCondition(ready)
+}
 
 // trackedConditionTypes are the operator-owned condition types whose transitions
 // are logged at Info level.
